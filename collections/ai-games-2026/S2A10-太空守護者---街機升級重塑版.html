@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>太空守護者 - 街機升級重塑版</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Noto+Sans+SC:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: #050508;
+            color: #fff;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .font-arcade {
+            font-family: 'Orbitron', 'Noto Sans SC', sans-serif;
+        }
+
+        .neon-text-blue {
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.8), 0 0 20px rgba(56, 189, 248, 0.5);
+        }
+        .neon-text-gold {
+            text-shadow: 0 0 10px rgba(251, 191, 36, 0.8), 0 0 20px rgba(251, 191, 36, 0.5);
+        }
+
+        ::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body class="w-screen h-screen flex items-center justify-center relative bg-black">
+
+    <!-- 遊戲畫布容器 -->
+    <div id="game-container" class="relative w-full h-full max-w-[800px] max-h-[1000px] flex items-center justify-center overflow-hidden shadow-2xl">
+        <canvas id="gameCanvas" class="w-full h-full block cursor-none"></canvas>
+
+        <!-- 遊戲 HUD -->
+        <div id="hud" class="absolute top-0 left-0 w-full p-4 pointer-events-none flex justify-between items-start font-arcade hidden">
+            <!-- 左側：生命值與護盾 -->
+            <div class="flex flex-col gap-2">
+                <div class="flex items-center gap-2 bg-slate-900/80 backdrop-blur border border-slate-700 px-3 py-1.5 rounded-lg">
+                    <i class="fa-solid fa-heart text-red-500 animate-pulse"></i>
+                    <div class="w-32 bg-slate-700 h-3 rounded-full overflow-hidden border border-slate-600">
+                        <div id="hp-bar" class="bg-gradient-to-r from-red-600 to-emerald-400 h-full w-full transition-all duration-300"></div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 bg-slate-900/80 backdrop-blur border border-slate-700 px-3 py-1.5 rounded-lg">
+                    <i class="fa-solid fa-shield-halved text-cyan-400"></i>
+                    <div class="w-32 bg-slate-700 h-3 rounded-full overflow-hidden border border-slate-600">
+                        <div id="shield-bar" class="bg-cyan-400 h-full w-0 transition-all duration-150"></div>
+                    </div>
+                </div>
+                <!-- 武器狀態 -->
+                <div id="weapon-status" class="text-xs text-cyan-300 font-mono tracking-wider flex items-center gap-1 mt-1">
+                    <i class="fa-solid fa-bolt"></i> <span id="weapon-name">常規等離子炮</span>
+                </div>
+            </div>
+
+            <!-- 右側：分數、關卡、金幣 -->
+            <div class="flex flex-col items-end gap-1 bg-slate-900/80 backdrop-blur border border-slate-700 px-4 py-2 rounded-lg">
+                <div class="text-xs text-slate-400">SCORE</div>
+                <div id="score-text" class="text-2xl font-bold text-amber-400 tracking-wider">0</div>
+                <div class="text-[11px] text-emerald-400 font-bold flex items-center gap-1">
+                    <i class="fa-solid fa-coins text-amber-400"></i> +<span id="hud-credits">0</span>
+                </div>
+                <div class="text-[10px] text-slate-500 flex gap-2 mt-0.5">
+                    <span>BEST: <span id="high-score-text">0</span></span>
+                    <span class="text-cyan-400">STAGE: <span id="stage-text">1</span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 暫停按鈕 -->
+        <button id="pause-btn" class="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-900/60 border border-slate-700 p-2.5 rounded-xl z-10 hidden transition hover:scale-105 active:scale-95">
+            <i class="fa-solid fa-pause text-lg"></i>
+        </button>
+
+        <!-- 主大廳界面 (Lobby Screen) -->
+        <div id="lobby-screen" class="absolute inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col items-center justify-between p-6 text-center z-20">
+            <!-- 標頭資訊 -->
+            <div class="w-full flex justify-between items-center max-w-md pt-2">
+                <div class="flex items-center gap-2 bg-slate-900/90 border border-amber-500/40 px-4 py-1.5 rounded-full shadow-lg">
+                    <i class="fa-solid fa-coins text-amber-400 text-lg"></i>
+                    <span id="lobby-credits" class="font-arcade text-lg font-bold text-amber-300">0</span>
+                </div>
+                <button id="sound-toggle-btn" class="flex items-center gap-2 text-xs bg-slate-900/90 hover:bg-slate-800 px-3.5 py-1.5 rounded-full border border-slate-700 transition">
+                    <i id="sound-icon" class="fa-solid fa-volume-high text-cyan-400"></i>
+                    <span id="sound-text">音效: 開</span>
+                </button>
+            </div>
+
+            <!-- 主標題 -->
+            <div class="my-auto my-4">
+                <h1 class="text-4xl md:text-6xl font-black font-arcade text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-200 to-indigo-500 tracking-wider neon-text-blue">
+                    SPACE DEFENDER
+                </h1>
+                <p class="text-xs font-semibold tracking-widest text-cyan-400/80 uppercase mt-2">星際守護者 · 基地大廳</p>
+            </div>
+
+            <!-- 選單按鈕區 -->
+            <div class="flex flex-col gap-3.5 w-full max-w-xs mb-auto">
+                <button id="start-btn" class="w-full py-4 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-xl font-bold text-lg shadow-lg hover:shadow-cyan-500/30 transition hover:scale-105 active:scale-95 text-white tracking-wider flex items-center justify-center gap-3">
+                    <i class="fa-solid fa-play"></i> 出徵戰鬥
+                </button>
+                <button id="shop-btn" class="w-full py-3.5 bg-slate-900 hover:bg-slate-800 border border-cyan-500/50 rounded-xl font-bold text-base shadow-md transition hover:scale-105 active:scale-95 text-cyan-300 flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-screwdriver-wrench text-amber-400"></i> 戰機改裝升級
+                </button>
+            </div>
+
+            <!-- 控制說明提示 -->
+            <div class="text-[11px] text-slate-500 max-w-xs border-t border-slate-800/80 pt-3 mb-2">
+                WASD / 箭頭移動 | 觸屏拖拽 | 擊殺敵機獲取星核金幣
+            </div>
+        </div>
+
+        <!-- 戰機升級車間界面 (Upgrades Screen) -->
+        <div id="shop-screen" class="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-between p-6 z-20 hidden">
+            <!-- 標頭 -->
+            <div class="w-full flex justify-between items-center max-w-md pt-2">
+                <button id="shop-back-btn" class="px-3.5 py-1.5 bg-slate-900 border border-slate-700 hover:bg-slate-800 rounded-lg text-xs font-bold text-slate-300 flex items-center gap-2 transition">
+                    <i class="fa-solid fa-arrow-left"></i> 返回大廳
+                </button>
+                <div class="flex items-center gap-2 bg-slate-900 border border-amber-500/40 px-4 py-1.5 rounded-full">
+                    <i class="fa-solid fa-coins text-amber-400"></i>
+                    <span id="shop-credits" class="font-arcade text-base font-bold text-amber-300">0</span>
+                </div>
+            </div>
+
+            <div class="text-center my-3">
+                <h2 class="text-2xl font-black font-arcade text-cyan-400 neon-text-blue">軍備升級中心</h2>
+                <p class="text-xs text-slate-400 mt-1">提升戰機基礎屬性，解鎖更強戰鬥力</p>
+            </div>
+
+            <!-- 升級列表 -->
+            <div class="w-full max-w-md space-y-3 my-auto overflow-y-auto max-h-[60vh] pr-1">
+                
+                <!-- 升級卡片: 血量上限 -->
+                <div class="bg-slate-900/80 border border-slate-800 p-3.5 rounded-xl flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-500 text-lg">
+                            <i class="fa-solid fa-heart"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-sm text-slate-200">裝甲耐久 <span id="lvl-hp" class="text-xs font-arcade text-cyan-400 ml-1">Lv.1</span></div>
+                            <div class="text-[11px] text-slate-400">初始最大生命值: <span id="val-hp" class="text-slate-200">100</span></div>
+                        </div>
+                    </div>
+                    <button id="buy-hp-btn" class="px-3.5 py-2 bg-amber-500/20 border border-amber-500/50 hover:bg-amber-500/30 rounded-lg text-xs font-bold text-amber-300 transition flex items-center gap-1.5 active:scale-95">
+                        <span id="cost-hp">200</span> <i class="fa-solid fa-coins text-amber-400"></i>
+                    </button>
+                </div>
+
+                <!-- 升級卡片: 護盾容量 -->
+                <div class="bg-slate-900/80 border border-slate-800 p-3.5 rounded-xl flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 text-lg">
+                            <i class="fa-solid fa-shield-halved"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-sm text-slate-200">能量護盾 <span id="lvl-shield" class="text-xs font-arcade text-cyan-400 ml-1">Lv.0</span></div>
+                            <div class="text-[11px] text-slate-400">初始護盾值: <span id="val-shield" class="text-slate-200">0</span></div>
+                        </div>
+                    </div>
+                    <button id="buy-shield-btn" class="px-3.5 py-2 bg-amber-500/20 border border-amber-500/50 hover:bg-amber-500/30 rounded-lg text-xs font-bold text-amber-300 transition flex items-center gap-1.5 active:scale-95">
+                        <span id="cost-shield">300</span> <i class="fa-solid fa-coins text-amber-400"></i>
+                    </button>
+                </div>
+
+                <!-- 升級卡片: 武器威力 -->
+                <div class="bg-slate-900/80 border border-slate-800 p-3.5 rounded-xl flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 text-lg">
+                            <i class="fa-solid fa-gun"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-sm text-slate-200">火力強化 <span id="lvl-power" class="text-xs font-arcade text-cyan-400 ml-1">Lv.1</span></div>
+                            <div class="text-[11px] text-slate-400">基礎火力傷害: <span id="val-power" class="text-slate-200">20</span></div>
+                        </div>
+                    </div>
+                    <button id="buy-power-btn" class="px-3.5 py-2 bg-amber-500/20 border border-amber-500/50 hover:bg-amber-500/30 rounded-lg text-xs font-bold text-amber-300 transition flex items-center gap-1.5 active:scale-95">
+                        <span id="cost-power">250</span> <i class="fa-solid fa-coins text-amber-400"></i>
+                    </button>
+                </div>
+
+                <!-- 升級卡片: 引擎航速 -->
+                <div class="bg-slate-900/80 border border-slate-800 p-3.5 rounded-xl flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-lg">
+                            <i class="fa-solid fa-gauge-high"></i>
+                        </div>
+                        <div>
+                            <div class="font-bold text-sm text-slate-200">曲速引擎 <span id="lvl-speed" class="text-xs font-arcade text-cyan-400 ml-1">Lv.1</span></div>
+                            <div class="text-[11px] text-slate-400">機動飛行速度: <span id="val-speed" class="text-slate-200">6.0</span></div>
+                        </div>
+                    </div>
+                    <button id="buy-speed-btn" class="px-3.5 py-2 bg-amber-500/20 border border-amber-500/50 hover:bg-amber-500/30 rounded-lg text-xs font-bold text-amber-300 transition flex items-center gap-1.5 active:scale-95">
+                        <span id="cost-speed">150</span> <i class="fa-solid fa-coins text-amber-400"></i>
+                    </button>
+                </div>
+
+            </div>
+
+            <div class="mb-2"></div>
+        </div>
+
+        <!-- 暫停選單 -->
+        <div id="pause-screen" class="absolute inset-0 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20 hidden">
+            <h2 class="text-4xl font-black font-arcade text-cyan-400 mb-6">遊戲暫停</h2>
+            <div class="flex flex-col gap-3.5 w-48">
+                <button id="resume-btn" class="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 font-bold rounded-xl transition shadow-lg text-white">繼續戰鬥</button>
+                <button id="restart-from-pause-btn" class="px-6 py-3 bg-slate-800 hover:bg-slate-700 font-bold rounded-xl transition border border-slate-600 text-slate-200">重新開始</button>
+                <button id="pause-to-lobby-btn" class="px-6 py-3 bg-slate-900 hover:bg-slate-800 font-bold rounded-xl transition border border-slate-700 text-slate-400">返回大廳</button>
+            </div>
+        </div>
+
+        <!-- 遊戲結束界面 -->
+        <div id="gameover-screen" class="absolute inset-0 bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20 hidden">
+            <div class="text-red-500 text-4xl md:text-5xl font-black font-arcade mb-2 animate-bounce">GAME OVER</div>
+            <p class="text-slate-400 text-xs mb-5">戰機已摧毀，守衛行動終止</p>
+
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 mb-6 max-w-xs w-full flex flex-col gap-2.5 font-arcade">
+                <div class="flex justify-between items-center text-slate-400 text-xs">
+                    <span>本局得分</span>
+                    <span id="final-score" class="text-xl font-bold text-amber-400">0</span>
+                </div>
+                <div class="flex justify-between items-center text-slate-400 text-xs border-t border-slate-800/80 pt-2">
+                    <span>獲取星核金幣</span>
+                    <span class="text-base font-bold text-emerald-400 flex items-center gap-1">
+                        <i class="fa-solid fa-coins text-amber-400"></i> +<span id="final-credits">0</span>
+                    </span>
+                </div>
+                <div class="flex justify-between items-center text-slate-400 text-xs border-t border-slate-800/80 pt-2">
+                    <span>波次紀錄</span>
+                    <span id="final-stage" class="text-sm font-bold text-cyan-400">1</span>
+                </div>
+                <div class="flex justify-between items-center text-slate-400 text-xs border-t border-slate-800/80 pt-2">
+                    <span>最高分數</span>
+                    <span id="final-highscore" class="text-sm font-bold text-emerald-400">0</span>
+                </div>
+            </div>
+
+            <div class="flex gap-3 w-full max-w-xs">
+                <button id="restart-btn" class="flex-1 py-3 bg-gradient-to-r from-red-500 to-amber-600 rounded-xl font-bold text-sm shadow-lg hover:shadow-red-500/30 transition hover:scale-105 active:scale-95 text-white flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-rotate-right"></i> 再戰一次
+                </button>
+                <button id="lobby-btn" class="flex-1 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-xl font-bold text-sm shadow-lg transition hover:scale-105 active:scale-95 text-slate-200 flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-house"></i> 返回大廳
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ==========================================================================
+           1. 音效合成器 (SoundFX)
+           ========================================================================== */
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playShoot() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.1);
+                
+                gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.1);
+            }
+
+            playLaser() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(1200, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(400, this.ctx.currentTime + 0.2);
+
+                gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+
+            playExplosion(isBig = false) {
+                if (!this.enabled || !this.ctx) return;
+                const dur = isBig ? 0.4 : 0.2;
+                const bufferSize = this.ctx.sampleRate * dur;
+                const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = this.ctx.createBufferSource();
+                noise.buffer = buffer;
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(isBig ? 300 : 600, this.ctx.currentTime);
+                filter.frequency.linearRampToValueAtTime(50, this.ctx.currentTime + dur);
+
+                const gain = this.ctx.createGain();
+                gain.gain.setValueAtTime(isBig ? 0.35 : 0.2, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + dur);
+
+                noise.connect(filter);
+                filter.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                noise.start();
+            }
+
+            playPowerup() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                
+                const now = this.ctx.currentTime;
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(600, now + 0.1);
+                osc.frequency.exponentialRampToValueAtTime(1200, now + 0.25);
+
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(now + 0.25);
+            }
+
+            playHit() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.08);
+
+                gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            }
+        }
+
+        const sound = new SoundFX();
+
+        /* ==========================================================================
+           2. 核心數據持久化管理 (Save System)
+           ========================================================================== */
+        const SaveData = {
+            credits: parseInt(localStorage.getItem('sd_credits')) || 0,
+            highScore: parseInt(localStorage.getItem('sd_highscore')) || 0,
+            upgrades: JSON.parse(localStorage.getItem('sd_upgrades')) || {
+                hp: 1,      // 血量等級
+                shield: 0,  // 護盾等級
+                power: 1,   // 火力等級
+                speed: 1    // 速度等級
+            },
+            save() {
+                localStorage.setItem('sd_credits', this.credits);
+                localStorage.setItem('sd_highscore', this.highScore);
+                localStorage.setItem('sd_upgrades', JSON.stringify(this.upgrades));
+            }
+        };
+
+        /* ==========================================================================
+           3. 遊戲畫布與狀態定義
+           ========================================================================== */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let width, height;
+        function resizeCanvas() {
+            const container = document.getElementById('game-container');
+            width = canvas.width = container.clientWidth;
+            height = canvas.height = container.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        const STATE = { LOBBY: 0, PLAYING: 1, PAUSED: 2, GAMEOVER: 3, SHOP: 4 };
+        let gameState = STATE.LOBBY;
+
+        let score = 0;
+        let sessionCredits = 0;
+        let stage = 1;
+        let gameTime = 0;
+        let lastSpawnTime = 0;
+
+        // UI 元素
+        const uiScore = document.getElementById('score-text');
+        const uiHighScore = document.getElementById('high-score-text');
+        const uiStage = document.getElementById('stage-text');
+        const uiHpBar = document.getElementById('hp-bar');
+        const uiShieldBar = document.getElementById('shield-bar');
+        const uiWeaponName = document.getElementById('weapon-name');
+        const uiHudCredits = document.getElementById('hud-credits');
+        const uiHud = document.getElementById('hud');
+        const uiPauseBtn = document.getElementById('pause-btn');
+
+        /* ==========================================================================
+           4. 操控系統
+           ========================================================================== */
+        const keys = {};
+        window.addEventListener('keydown', e => { keys[e.code] = true; });
+        window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+        let touchX = null;
+        let touchY = null;
+        canvas.addEventListener('touchstart', e => {
+            if (gameState !== STATE.PLAYING) return;
+            const rect = canvas.getBoundingClientRect();
+            touchX = e.touches[0].clientX - rect.left;
+            touchY = e.touches[0].clientY - rect.top;
+        }, {passive: true});
+
+        canvas.addEventListener('touchmove', e => {
+            if (gameState !== STATE.PLAYING || touchX === null) return;
+            const rect = canvas.getBoundingClientRect();
+            const currentX = e.touches[0].clientX - rect.left;
+            const currentY = e.touches[0].clientY - rect.top;
+            
+            const dx = currentX - touchX;
+            const dy = currentY - touchY;
+
+            player.x += dx;
+            player.y += dy;
+
+            touchX = currentX;
+            touchY = currentY;
+        }, {passive: true});
+
+        canvas.addEventListener('touchend', () => { touchX = null; touchY = null; });
+
+        /* ==========================================================================
+           5. 實體類定義
+           ========================================================================== */
+
+        // 背景星空
+        class Star {
+            constructor() {
+                this.reset();
+                this.y = Math.random() * height;
+            }
+            reset() {
+                this.x = Math.random() * width;
+                this.y = 0;
+                this.size = Math.random() * 2 + 0.5;
+                this.speed = this.size * 1.5;
+                this.alpha = Math.random() * 0.8 + 0.2;
+            }
+            update() {
+                this.y += this.speed;
+                if (this.y > height) this.reset();
+            }
+            draw() {
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+            }
+        }
+
+        // 玩家戰機 (結合持久化升級屬性)
+        class Player {
+            constructor() {
+                this.width = 44;
+                this.height = 48;
+                this.x = width / 2;
+                this.y = height - 80;
+                
+                this.applyUpgrades();
+
+                this.weaponType = 'NORMAL';
+                this.weaponTimer = 0;
+                this.lastShot = 0;
+                this.shootDelay = 150;
+            }
+
+            applyUpgrades() {
+                const up = SaveData.upgrades;
+                this.maxHp = 100 + (up.hp - 1) * 25;
+                this.hp = this.maxHp;
+
+                this.maxShield = up.shield * 25;
+                this.shield = this.maxShield;
+
+                this.baseDamage = 20 + (up.power - 1) * 8;
+                this.speed = 5.5 + (up.speed - 1) * 0.8;
+            }
+
+            reset() {
+                this.x = width / 2;
+                this.y = height - 80;
+                this.applyUpgrades();
+                this.weaponType = 'NORMAL';
+                this.weaponTimer = 0;
+            }
+
+            update(dt) {
+                if (keys['KeyW'] || keys['ArrowUp']) this.y -= this.speed;
+                if (keys['KeyS'] || keys['ArrowDown']) this.y += this.speed;
+                if (keys['KeyA'] || keys['ArrowLeft']) this.x -= this.speed;
+                if (keys['KeyD'] || keys['ArrowRight']) this.x += this.speed;
+
+                this.x = Math.max(this.width / 2, Math.min(width - this.width / 2, this.x));
+                this.y = Math.max(this.height / 2, Math.min(height - this.height / 2, this.y));
+
+                if (this.weaponTimer > 0) {
+                    this.weaponTimer -= dt;
+                    if (this.weaponTimer <= 0) {
+                        this.weaponType = 'NORMAL';
+                        this.shootDelay = 150;
+                        uiWeaponName.innerText = '常規等離子炮';
+                    }
+                }
+
+                const now = Date.now();
+                if (now - this.lastShot > this.shootDelay) {
+                    this.shoot();
+                    this.lastShot = now;
+                }
+
+                // 尾焰
+                particles.push(new Particle(
+                    this.x + (Math.random() * 8 - 4),
+                    this.y + this.height / 2,
+                    (Math.random() - 0.5) * 0.5,
+                    Math.random() * 2 + 2,
+                    Math.random() * 3 + 2,
+                    '#38bdf8',
+                    0.3
+                ));
+            }
+
+            shoot() {
+                if (this.weaponType === 'NORMAL') {
+                    bullets.push(new Bullet(this.x, this.y - 20, 0, -12, false, '#38bdf8', 4, 12, this.baseDamage));
+                    sound.playShoot();
+                } else if (this.weaponType === 'DOUBLE') {
+                    bullets.push(new Bullet(this.x - 12, this.y - 10, 0, -12, false, '#a855f7', 4, 12, this.baseDamage));
+                    bullets.push(new Bullet(this.x + 12, this.y - 10, 0, -12, false, '#a855f7', 4, 12, this.baseDamage));
+                    sound.playShoot();
+                } else if (this.weaponType === 'LASER') {
+                    bullets.push(new Bullet(this.x, this.y - 20, 0, -16, false, '#f43f5e', 6, 25, this.baseDamage * 1.8));
+                    sound.playLaser();
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                if (this.shield > 0) {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 32, 0, Math.PI * 2);
+                    ctx.strokeStyle = `rgba(56, 189, 248, ${0.4 + Math.sin(Date.now() / 100) * 0.2})`;
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                    ctx.fillStyle = 'rgba(56, 189, 248, 0.1)';
+                    ctx.fill();
+                }
+
+                // 机身
+                ctx.fillStyle = '#f8fafc';
+                ctx.beginPath();
+                ctx.moveTo(0, -24);
+                ctx.lineTo(16, 16);
+                ctx.lineTo(8, 20);
+                ctx.lineTo(0, 12);
+                ctx.lineTo(-8, 20);
+                ctx.lineTo(-16, 16);
+                ctx.closePath();
+                ctx.fill();
+
+                // 机翼侧发光
+                ctx.fillStyle = '#0284c7';
+                ctx.beginPath();
+                ctx.moveTo(16, 16); ctx.lineTo(24, 18); ctx.lineTo(8, 4);
+                ctx.closePath(); ctx.fill();
+
+                ctx.beginPath();
+                ctx.moveTo(-16, 16); ctx.lineTo(-24, 18); ctx.lineTo(-8, 4);
+                ctx.closePath(); ctx.fill();
+
+                // 核心
+                ctx.fillStyle = '#38bdf8';
+                ctx.beginPath();
+                ctx.arc(0, -4, 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            hit(damage) {
+                if (this.shield > 0) {
+                    this.shield -= damage;
+                    if (this.shield < 0) {
+                        this.hp += this.shield;
+                        this.shield = 0;
+                    }
+                } else {
+                    this.hp -= damage;
+                }
+
+                sound.playHit();
+                updateHUD();
+
+                if (this.hp <= 0) {
+                    createExplosion(this.x, this.y, '#f97316', 40);
+                    sound.playExplosion(true);
+                    gameOver();
+                }
+            }
+        }
+
+        // 子弹类
+        class Bullet {
+            constructor(x, y, vx, vy, isEnemy = false, color = '#facc15', width = 4, height = 12, damage = 20) {
+                this.x = x;
+                this.y = y;
+                this.vx = vx;
+                this.vy = vy;
+                this.isEnemy = isEnemy;
+                this.color = color;
+                this.width = width;
+                this.height = height;
+                this.damage = damage;
+                this.markedForDeletion = false;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+
+                if (this.x < -20 || this.x > width + 20 || this.y < -20 || this.y > height + 20) {
+                    this.markedForDeletion = true;
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.fillStyle = this.color;
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = 8;
+                ctx.fillRect(this.x - this.width / 2, this.y - this.height / 2, this.width, this.height);
+                ctx.restore();
+            }
+        }
+
+        // 敵機類
+        class Enemy {
+            constructor(type) {
+                this.type = type;
+                this.x = Math.random() * (width - 60) + 30;
+                this.y = -40;
+                this.markedForDeletion = false;
+                this.lastShot = Date.now();
+
+                if (type === 'SCOUT') {
+                    this.width = 28;
+                    this.height = 28;
+                    this.hp = 20;
+                    this.maxHp = 20;
+                    this.speedY = Math.random() * 1.5 + 2.5;
+                    this.scoreValue = 100;
+                    this.creditsValue = 10;
+                    this.color = '#a855f7';
+                } else if (type === 'FIGHTER') {
+                    this.width = 36;
+                    this.height = 36;
+                    this.hp = 55;
+                    this.maxHp = 55;
+                    this.speedY = Math.random() * 1 + 1.5;
+                    this.scoreValue = 250;
+                    this.creditsValue = 25;
+                    this.color = '#ef4444';
+                } else if (type === 'HEAVY') {
+                    this.width = 56;
+                    this.height = 56;
+                    this.hp = 180;
+                    this.maxHp = 180;
+                    this.speedY = 0.8;
+                    this.scoreValue = 600;
+                    this.creditsValue = 60;
+                    this.color = '#f59e0b';
+                }
+            }
+
+            update() {
+                this.y += this.speedY;
+                if (this.type === 'SCOUT') {
+                    this.x += Math.sin(this.y / 30) * 2;
+                }
+
+                if (this.y > height + 50) this.markedForDeletion = true;
+
+                const now = Date.now();
+                if (this.type === 'FIGHTER' && now - this.lastShot > 2000) {
+                    bullets.push(new Bullet(this.x, this.y + 15, 0, 5, true, '#f43f5e', 4, 12, 15));
+                    this.lastShot = now;
+                } else if (this.type === 'HEAVY' && now - this.lastShot > 1600) {
+                    bullets.push(new Bullet(this.x - 15, this.y + 20, -1, 4.5, true, '#f59e0b', 5, 12, 20));
+                    bullets.push(new Bullet(this.x + 15, this.y + 20, 1, 4.5, true, '#f59e0b', 5, 12, 20));
+                    this.lastShot = now;
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                ctx.fillStyle = this.color;
+                ctx.shadowColor = this.color;
+                ctx.shadowBlur = 6;
+
+                if (this.type === 'SCOUT') {
+                    ctx.beginPath();
+                    ctx.moveTo(0, 14); ctx.lineTo(14, 0); ctx.lineTo(0, -14); ctx.lineTo(-14, 0);
+                    ctx.closePath(); ctx.fill();
+                } else if (this.type === 'FIGHTER') {
+                    ctx.beginPath();
+                    ctx.moveTo(0, 18); ctx.lineTo(18, -14); ctx.lineTo(0, -6); ctx.lineTo(-18, -14);
+                    ctx.closePath(); ctx.fill();
+                } else if (this.type === 'HEAVY') {
+                    ctx.fillRect(-24, -20, 48, 30);
+                    ctx.fillStyle = '#78350f';
+                    ctx.fillRect(-12, 10, 24, 10);
+                }
+
+                if (this.hp < this.maxHp) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+                    ctx.fillRect(-18, -this.height / 2 - 8, 36, 4);
+                    ctx.fillStyle = '#10b981';
+                    ctx.fillRect(-18, -this.height / 2 - 8, (36 * this.hp) / this.maxHp, 4);
+                }
+
+                ctx.restore();
+            }
+        }
+
+        // 道具掉落
+        class PowerUp {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.size = 20;
+                this.vy = 1.5;
+                this.markedForDeletion = false;
+
+                const types = ['DOUBLE', 'LASER', 'SHIELD', 'HEAL'];
+                this.type = types[Math.floor(Math.random() * types.length)];
+            }
+
+            update() {
+                this.y += this.vy;
+                if (this.y > height + 30) this.markedForDeletion = true;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                let color = '#38bdf8';
+                let icon = 'P';
+                if (this.type === 'DOUBLE') { color = '#a855f7'; icon = '2X'; }
+                if (this.type === 'LASER') { color = '#f43f5e'; icon = 'L'; }
+                if (this.type === 'SHIELD') { color = '#38bdf8'; icon = 'S'; }
+                if (this.type === 'HEAL') { color = '#10b981'; icon = '+'; }
+
+                ctx.fillStyle = color;
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 10;
+                ctx.beginPath();
+                ctx.arc(0, 0, 12, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 11px Orbitron, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(icon, 0, 1);
+
+                ctx.restore();
+            }
+        }
+
+        // 粒子效果
+        class Particle {
+            constructor(x, y, vx, vy, size, color, alphaDecrease = 0.02) {
+                this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+                this.size = size; this.color = color;
+                this.alpha = 1; this.alphaDecrease = alphaDecrease;
+                this.markedForDeletion = false;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha -= this.alphaDecrease;
+                if (this.alpha <= 0) this.markedForDeletion = true;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        /* ==========================================================================
+           6. 遊戲核心邏輯與循環
+           ========================================================================== */
+        let stars = [];
+        let player = new Player();
+        let bullets = [];
+        let enemies = [];
+        let powerUps = [];
+        let particles = [];
+
+        for (let i = 0; i < 70; i++) stars.push(new Star());
+
+        function createExplosion(x, y, color, count = 20) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 4 + 1;
+                particles.push(new Particle(
+                    x, y,
+                    Math.cos(angle) * speed,
+                    Math.sin(angle) * speed,
+                    Math.random() * 3 + 1,
+                    color,
+                    Math.random() * 0.03 + 0.015
+                ));
+            }
+        }
+
+        function spawnEnemies() {
+            const now = Date.now();
+            const spawnInterval = Math.max(400, 1500 - stage * 100);
+
+            if (now - lastSpawnTime > spawnInterval) {
+                const rand = Math.random();
+                if (rand < 0.5) enemies.push(new Enemy('SCOUT'));
+                else if (rand < 0.85) enemies.push(new Enemy('FIGHTER'));
+                else enemies.push(new Enemy('HEAVY'));
+                lastSpawnTime = now;
+            }
+        }
+
+        function updateHUD() {
+            uiScore.innerText = score;
+            uiStage.innerText = stage;
+            uiHighScore.innerText = SaveData.highScore;
+            uiHudCredits.innerText = sessionCredits;
+            uiHpBar.style.width = `${Math.max(0, (player.hp / player.maxHp) * 100)}%`;
+            uiShieldBar.style.width = `${Math.max(0, (player.shield / player.maxShield) * 100)}%`;
+        }
+
+        function checkCollisions() {
+            // 1. 玩家擊中敵機
+            bullets.forEach(b => {
+                if (b.isEnemy || b.markedForDeletion) return;
+                enemies.forEach(e => {
+                    if (e.markedForDeletion) return;
+                    if (Math.hypot(b.x - e.x, b.y - e.y) < (b.width / 2 + e.width / 2)) {
+                        b.markedForDeletion = true;
+                        e.hp -= b.damage;
+                        createExplosion(b.x, b.y, '#fef08a', 4);
+
+                        if (e.hp <= 0) {
+                            e.markedForDeletion = true;
+                            score += e.scoreValue;
+                            sessionCredits += e.creditsValue;
+                            SaveData.credits += e.creditsValue;
+                            SaveData.save();
+
+                            createExplosion(e.x, e.y, e.color, 25);
+                            sound.playExplosion(e.type === 'HEAVY');
+
+                            if (Math.random() < 0.15) {
+                                powerUps.push(new PowerUp(e.x, e.y));
+                            }
+
+                            if (score >= stage * 2000) stage++;
+                            updateHUD();
+                        }
+                    }
+                });
+            });
+
+            // 2. 敵機擊中玩家
+            bullets.forEach(b => {
+                if (!b.isEnemy || b.markedForDeletion) return;
+                if (Math.hypot(b.x - player.x, b.y - player.y) < (b.width / 2 + player.width / 3)) {
+                    b.markedForDeletion = true;
+                    player.hit(b.damage);
+                    createExplosion(b.x, b.y, '#ef4444', 8);
+                }
+            });
+
+            // 3. 敵機與玩家碰撞
+            enemies.forEach(e => {
+                if (e.markedForDeletion) return;
+                if (Math.hypot(e.x - player.x, e.y - player.y) < (e.width / 2 + player.width / 3)) {
+                    e.markedForDeletion = true;
+                    createExplosion(e.x, e.y, e.color, 20);
+                    player.hit(30);
+                }
+            });
+
+            // 4. 道具拾取
+            powerUps.forEach(p => {
+                if (p.markedForDeletion) return;
+                if (Math.hypot(p.x - player.x, p.y - player.y) < (p.size + player.width / 2)) {
+                    p.markedForDeletion = true;
+                    sound.playPowerup();
+
+                    if (p.type === 'DOUBLE') {
+                        player.weaponType = 'DOUBLE';
+                        player.shootDelay = 130;
+                        player.weaponTimer = 8000;
+                        uiWeaponName.innerText = '雙重等離子彈';
+                    } else if (p.type === 'LASER') {
+                        player.weaponType = 'LASER';
+                        player.shootDelay = 180;
+                        player.weaponTimer = 8000;
+                        uiWeaponName.innerText = '重型穿透高能激光';
+                    } else if (p.type === 'SHIELD') {
+                        player.shield = player.maxShield;
+                    } else if (p.type === 'HEAL') {
+                        player.hp = Math.min(player.maxHp, player.hp + 35);
+                    }
+                    updateHUD();
+                }
+            });
+        }
+
+        let lastTime = 0;
+        function gameLoop(timestamp) {
+            const dt = timestamp - lastTime || 0;
+            lastTime = timestamp;
+
+            ctx.clearRect(0, 0, width, height);
+
+            stars.forEach(s => { s.update(); s.draw(); });
+
+            if (gameState === STATE.PLAYING) {
+                gameTime += dt;
+                spawnEnemies();
+
+                player.update(dt);
+                bullets.forEach(b => b.update());
+                enemies.forEach(e => e.update());
+                powerUps.forEach(p => p.update());
+                particles.forEach(p => p.update());
+
+                checkCollisions();
+
+                bullets = bullets.filter(b => !b.markedForDeletion);
+                enemies = enemies.filter(e => !e.markedForDeletion);
+                powerUps = powerUps.filter(p => !p.markedForDeletion);
+                particles = particles.filter(p => !p.markedForDeletion);
+            }
+
+            if (gameState === STATE.PLAYING || gameState === STATE.PAUSED) {
+                powerUps.forEach(p => p.draw());
+                bullets.forEach(b => b.draw());
+                enemies.forEach(e => e.draw());
+                player.draw();
+            }
+
+            particles.forEach(p => p.draw());
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        /* ==========================================================================
+           7. UI 與車間升級邏輯
+           ========================================================================== */
+        const lobbyScreen = document.getElementById('lobby-screen');
+        const shopScreen = document.getElementById('shop-screen');
+        const pauseScreen = document.getElementById('pause-screen');
+        const gameoverScreen = document.getElementById('gameover-screen');
+
+        function updateLobbyUI() {
+            document.getElementById('lobby-credits').innerText = SaveData.credits;
+            document.getElementById('shop-credits').innerText = SaveData.credits;
+        }
+
+        function updateShopUI() {
+            updateLobbyUI();
+            const up = SaveData.upgrades;
+
+            // HP
+            document.getElementById('lvl-hp').innerText = `Lv.${up.hp}`;
+            document.getElementById('val-hp').innerText = 100 + (up.hp - 1) * 25;
+            document.getElementById('cost-hp').innerText = up.hp * 200;
+
+            // Shield
+            document.getElementById('lvl-shield').innerText = `Lv.${up.shield}`;
+            document.getElementById('val-shield').innerText = up.shield * 25;
+            document.getElementById('cost-shield').innerText = (up.shield + 1) * 250;
+
+            // Power
+            document.getElementById('lvl-power').innerText = `Lv.${up.power}`;
+            document.getElementById('val-power').innerText = 20 + (up.power - 1) * 8;
+            document.getElementById('cost-power').innerText = up.power * 250;
+
+            // Speed
+            document.getElementById('lvl-speed').innerText = `Lv.${up.speed}`;
+            document.getElementById('val-speed').innerText = (5.5 + (up.speed - 1) * 0.8).toFixed(1);
+            document.getElementById('cost-speed').innerText = up.speed * 150;
+        }
+
+        function showLobby() {
+            gameState = STATE.LOBBY;
+            updateLobbyUI();
+            lobbyScreen.classList.remove('hidden');
+            shopScreen.classList.add('hidden');
+            pauseScreen.classList.add('hidden');
+            gameoverScreen.classList.add('hidden');
+            uiHud.classList.add('hidden');
+            uiPauseBtn.classList.add('hidden');
+        }
+
+        function startGame() {
+            sound.init();
+            score = 0;
+            sessionCredits = 0;
+            stage = 1;
+            bullets = [];
+            enemies = [];
+            powerUps = [];
+            particles = [];
+            
+            player.reset();
+            updateHUD();
+
+            gameState = STATE.PLAYING;
+            lobbyScreen.classList.add('hidden');
+            shopScreen.classList.add('hidden');
+            pauseScreen.classList.add('hidden');
+            gameoverScreen.classList.add('hidden');
+            uiHud.classList.remove('hidden');
+            uiPauseBtn.classList.remove('hidden');
+        }
+
+        function pauseGame() {
+            if (gameState === STATE.PLAYING) {
+                gameState = STATE.PAUSED;
+                pauseScreen.classList.remove('hidden');
+            }
+        }
+
+        function resumeGame() {
+            if (gameState === STATE.PAUSED) {
+                gameState = STATE.PLAYING;
+                pauseScreen.classList.add('hidden');
+            }
+        }
+
+        function gameOver() {
+            gameState = STATE.GAMEOVER;
+            if (score > SaveData.highScore) {
+                SaveData.highScore = score;
+                SaveData.save();
+            }
+
+            document.getElementById('final-score').innerText = score;
+            document.getElementById('final-credits').innerText = sessionCredits;
+            document.getElementById('final-stage').innerText = stage;
+            document.getElementById('final-highscore').innerText = SaveData.highScore;
+
+            uiHud.classList.add('hidden');
+            uiPauseBtn.classList.add('hidden');
+            gameoverScreen.classList.remove('hidden');
+        }
+
+        // 升級購買綁定
+        function setupUpgradeBtn(btnId, type, costCalc) {
+            document.getElementById(btnId).addEventListener('click', () => {
+                const cost = costCalc();
+                if (SaveData.credits >= cost) {
+                    SaveData.credits -= cost;
+                    SaveData.upgrades[type]++;
+                    SaveData.save();
+                    sound.playPowerup();
+                    updateShopUI();
+                }
+            });
+        }
+
+        setupUpgradeBtn('buy-hp-btn', 'hp', () => SaveData.upgrades.hp * 200);
+        setupUpgradeBtn('buy-shield-btn', 'shield', () => (SaveData.upgrades.shield + 1) * 250);
+        setupUpgradeBtn('buy-power-btn', 'power', () => SaveData.upgrades.power * 250);
+        setupUpgradeBtn('buy-speed-btn', 'speed', () => SaveData.upgrades.speed * 150);
+
+        // 按鈕點擊事件
+        document.getElementById('start-btn').addEventListener('click', startGame);
+        document.getElementById('shop-btn').addEventListener('click', () => {
+            gameState = STATE.SHOP;
+            updateShopUI();
+            lobbyScreen.classList.add('hidden');
+            shopScreen.classList.remove('hidden');
+        });
+        document.getElementById('shop-back-btn').addEventListener('click', showLobby);
+
+        document.getElementById('pause-btn').addEventListener('click', pauseGame);
+        document.getElementById('resume-btn').addEventListener('click', resumeGame);
+        document.getElementById('restart-from-pause-btn').addEventListener('click', startGame);
+        document.getElementById('pause-to-lobby-btn').addEventListener('click', showLobby);
+
+        document.getElementById('restart-btn').addEventListener('click', startGame);
+        document.getElementById('lobby-btn').addEventListener('click', showLobby);
+
+        // 音效開關
+        const soundBtn = document.getElementById('sound-toggle-btn');
+        const soundIcon = document.getElementById('sound-icon');
+        const soundText = document.getElementById('sound-text');
+        soundBtn.addEventListener('click', () => {
+            sound.enabled = !sound.enabled;
+            if (sound.enabled) {
+                soundIcon.className = 'fa-solid fa-volume-high text-cyan-400';
+                soundText.innerText = '音效: 開';
+            } else {
+                soundIcon.className = 'fa-solid fa-volume-xmark text-slate-500';
+                soundText.innerText = '音效: 關';
+            }
+        });
+
+        // 初始化
+        showLobby();
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>

@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>幾何冒險：5段跳闖關 (100關)</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+            user-select: none;
+        }
+
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
+            border-radius: 12px;
+            overflow: hidden;
+            background: #1e1e2f;
+        }
+
+        canvas {
+            display: block;
+            background: #181824;
+        }
+
+        /* 頁面 / 選單遮罩 */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(24, 24, 36, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 32px;
+            color: #ff9800;
+            margin-bottom: 5px;
+            text-shadow: 0 0 10px rgba(255, 152, 0, 0.5);
+        }
+
+        p.subtitle {
+            font-size: 14px;
+            color: #aaa;
+            margin-bottom: 15px;
+        }
+
+        /* 關卡選擇選單網格 */
+        .level-grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 8px;
+            width: 100%;
+            max-width: 740px;
+            max-height: 320px;
+            overflow-y: auto;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            border: 1px solid #333;
+        }
+
+        .level-grid::-webkit-scrollbar {
+            width: 8px;
+        }
+        .level-grid::-webkit-scrollbar-thumb {
+            background: #ff9800;
+            border-radius: 4px;
+        }
+
+        .level-btn {
+            aspect-ratio: 1;
+            background: #2a2a40;
+            border: 2px solid #444;
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .level-btn.unlocked {
+            background: #ff9800;
+            border-color: #ffb74d;
+            box-shadow: 0 0 8px rgba(255, 152, 0, 0.4);
+            color: #000;
+        }
+
+        .level-btn.unlocked:hover {
+            background: #ffa726;
+            transform: scale(1.08);
+        }
+
+        .level-btn.locked {
+            background: #1a1a24;
+            border-color: #2c2c3a;
+            color: #555;
+            cursor: not-allowed;
+        }
+
+        .level-btn.completed {
+            background: #2e7d32;
+            border-color: #66bb6a;
+            color: #fff;
+        }
+
+        /* 按鈕風格 */
+        .btn {
+            background: linear-gradient(135deg, #ff9800, #f57c00);
+            border: none;
+            color: white;
+            padding: 10px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 20px;
+            cursor: pointer;
+            margin-top: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transition: transform 0.1s;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+        }
+
+        /* 遊戲頂部 HUD */
+        .hud {
+            position: absolute;
+            top: 10px;
+            left: 15px;
+            right: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: none;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 5;
+        }
+
+        .jump-count-badge {
+            background: rgba(255, 152, 0, 0.2);
+            border: 1px solid #ff9800;
+            color: #ffb74d;
+            padding: 4px 12px;
+            border-radius: 12px;
+        }
+
+        .hud-btn {
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .hud-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* 結算畫面 */
+        .modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 20;
+        }
+
+        .modal h2 {
+            font-size: 36px;
+            margin-bottom: 10px;
+        }
+
+        .modal p {
+            font-size: 18px;
+            color: #ccc;
+            margin-bottom: 20px;
+        }
+
+        .controls-info {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="800" height="450"></canvas>
+
+    <!-- 遊戲中 HUD -->
+    <div class="hud">
+        <span id="hud-level">第 1 關</span>
+        <span class="jump-count-badge" id="hud-jumps">剩餘跳躍：5 次</span>
+        <button class="hud-btn" onclick="showMainMenu()">選單</button>
+    </div>
+
+    <!-- 主選單 / 關卡選擇頁面 -->
+    <div class="screen" id="main-menu">
+        <h1>幾何 5 段跳冒險 (100關)</h1>
+        <p class="subtitle">能力：能在空中連續跳躍 5 次！通過當前關卡解鎖下一關</p>
+        
+        <div class="level-grid" id="level-grid"></div>
+
+        <div class="controls-info">操作方式：A / D 或 ← / → 移動 | Space 或 W / ↑ 跳躍（最多連續 5 次）</div>
+        <button class="btn" onclick="resetProgress()" style="background: #c62828; font-size: 12px; padding: 5px 12px; margin-top: 10px;">重置進度</button>
+    </div>
+
+    <!-- 通關 / 失敗 彈窗 -->
+    <div class="modal" id="result-modal">
+        <h2 id="modal-title">通關成功！</h2>
+        <p id="modal-desc">恭喜解鎖下一個關卡！</p>
+        <div style="display: flex; gap: 10px;">
+            <button class="btn" onclick="showMainMenu()">關卡選單</button>
+            <button class="btn" id="modal-next-btn" onclick="nextLevel()">下一關</button>
+            <button class="btn" id="modal-retry-btn" onclick="restartLevel()" style="display: none;">重新嘗試</button>
+        </div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// 紀錄解鎖進度
+let maxUnlockedLevel = parseInt(localStorage.getItem('geo_5jump_max_level')) || 1;
+let currentLevel = 1;
+let isPlaying = false;
+let animationFrameId = null;
+
+// 按鍵狀態
+const keys = {
+    left: false,
+    right: false,
+    upPressed: false
+};
+
+const MAX_JUMPS = 5; // 定義 5 段跳
+
+// 玩家物理參數
+const player = {
+    x: 50,
+    y: 300,
+    width: 25,
+    height: 25,
+    vx: 0,
+    vy: 0,
+    speed: 5,
+    jumpForce: -9.5,
+    gravity: 0.45,
+    isGrounded: false,
+    jumpsLeft: MAX_JUMPS,
+    color: '#ff9800'
+};
+
+// 地圖元素
+let platforms = [];
+let spikes = [];
+let pads = [];
+let goal = null;
+
+// 生成 1~100 關地圖
+function buildLevel(level) {
+    platforms = [];
+    spikes = [];
+    pads = [];
+
+    // 起始平台
+    platforms.push({ x: 0, y: 380, w: 120, h: 70, type: 'normal' });
+
+    let currentX = 120;
+    // 地圖長度
+    const targetLength = 1500 + level * 250;
+
+    let seed = level * 888;
+    function pseudoRandom() {
+        let x = Math.sin(seed++) * 10000;
+        return x - Math.floor(x);
+    }
+
+    while (currentX < targetLength) {
+        // 考慮到有 5 段跳，地圖間距與高低落差設計加大
+        const gap = 120 + pseudoRandom() * 150 + Math.min(level * 2, 100);
+        const platW = Math.max(120 - level * 0.5, 50) + pseudoRandom() * 50;
+        const platY = 360 - pseudoRandom() * 200; // 落差加大
+
+        currentX += gap;
+        platforms.push({ x: currentX, y: platY, w: platW, h: 200, type: 'normal' });
+
+        // 陷阱機關
+        if (pseudoRandom() < 0.65) {
+            const spikeX = currentX + 15 + pseudoRandom() * (platW - 45);
+            spikes.push({ x: spikeX, y: platY - 20, w: 20, h: 20 });
+        } else if (pseudoRandom() < 0.85 && level >= 3) {
+            const padX = currentX + 15 + pseudoRandom() * (platW - 45);
+            pads.push({ x: padX, y: platY - 8, w: 30, h: 8 });
+        }
+
+        // 高關卡移動平台
+        if (level >= 8 && pseudoRandom() < 0.35) {
+            platforms.push({
+                x: currentX + platW / 2,
+                y: Math.max(platY - 100, 100),
+                w: 60,
+                h: 15,
+                type: 'moving',
+                startY: Math.max(platY - 100, 100),
+                range: 60,
+                speed: 1.5 + pseudoRandom() * 2,
+                dir: 1
+            });
+        }
+
+        currentX += platW;
+    }
+
+    // 終點平台
+    platforms.push({ x: currentX + 80, y: 350, w: 150, h: 100, type: 'normal' });
+    goal = { x: currentX + 130, y: 290, w: 30, h: 60 };
+}
+
+// 關卡選單
+function renderLevelMenu() {
+    const grid = document.getElementById('level-grid');
+    grid.innerHTML = '';
+
+    for (let i = 1; i <= 100; i++) {
+        const btn = document.createElement('button');
+        btn.classList.add('level-btn');
+        btn.innerText = i;
+
+        if (i <= maxUnlockedLevel) {
+            btn.classList.add('unlocked');
+            if (i < maxUnlockedLevel) btn.classList.add('completed');
+            btn.onclick = () => startLevel(i);
+        } else {
+            btn.classList.add('locked');
+            btn.innerText = '🔒';
+        }
+        grid.appendChild(btn);
+    }
+}
+
+function showMainMenu() {
+    isPlaying = false;
+    document.getElementById('main-menu').style.display = 'flex';
+    document.getElementById('result-modal').style.display = 'none';
+    renderLevelMenu();
+}
+
+function startLevel(lvl) {
+    currentLevel = lvl;
+    document.getElementById('hud-level').innerText = `第 ${currentLevel} 關`;
+    document.getElementById('main-menu').style.display = 'none';
+    document.getElementById('result-modal').style.display = 'none';
+
+    // 重置玩家
+    player.x = 30;
+    player.y = 300;
+    player.vx = 0;
+    player.vy = 0;
+    player.jumpsLeft = MAX_JUMPS;
+    updateJumpHUD();
+
+    buildLevel(currentLevel);
+    isPlaying = true;
+
+    if (animationFrameId) cancelAnimationFrame(animationFrameId);
+    gameLoop();
+}
+
+function restartLevel() {
+    startLevel(currentLevel);
+}
+
+function nextLevel() {
+    if (currentLevel < 100) {
+        startLevel(currentLevel + 1);
+    } else {
+        showMainMenu();
+    }
+}
+
+function resetProgress() {
+    if (confirm("確定要重置所有通關紀錄嗎？")) {
+        maxUnlockedLevel = 1;
+        localStorage.setItem('geo_5jump_max_level', 1);
+        renderLevelMenu();
+    }
+}
+
+function updateJumpHUD() {
+    document.getElementById('hud-jumps').innerText = `剩餘跳躍：${player.jumpsLeft} 次`;
+}
+
+function levelComplete() {
+    isPlaying = false;
+    if (currentLevel === maxUnlockedLevel && maxUnlockedLevel < 100) {
+        maxUnlockedLevel++;
+        localStorage.setItem('geo_5jump_max_level', maxUnlockedLevel);
+    }
+
+    const modal = document.getElementById('result-modal');
+    document.getElementById('modal-title').innerText = "🎉 成功通關！";
+    document.getElementById('modal-title').style.color = "#ff9800";
+    document.getElementById('modal-desc').innerText = `太強了！順利通過第 ${currentLevel} 關！`;
+    document.getElementById('modal-next-btn').style.display = "inline-block";
+    document.getElementById('modal-retry-btn').style.display = "none";
+    modal.style.display = 'flex';
+}
+
+function gameOver() {
+    isPlaying = false;
+    const modal = document.getElementById('result-modal');
+    document.getElementById('modal-title').innerText = "💥 挑戰失敗";
+    document.getElementById('modal-title').style.color = "#c62828";
+    document.getElementById('modal-desc').innerText = "善用 5 段跳來越過高山與懸崖吧！";
+    document.getElementById('modal-next-btn').style.display = "none";
+    document.getElementById('modal-retry-btn').style.display = "inline-block";
+    modal.style.display = 'flex';
+}
+
+// 執行跳躍邏輯
+function performJump() {
+    if (player.jumpsLeft > 0) {
+        player.vy = player.jumpForce;
+        player.jumpsLeft--;
+        player.isGrounded = false;
+        updateJumpHUD();
+    }
+}
+
+// 物理模擬
+function update() {
+    // 左右移動
+    if (keys.left) player.vx = -player.speed;
+    else if (keys.right) player.vx = player.speed;
+    else player.vx = 0;
+
+    // 重力
+    player.vy += player.gravity;
+
+    // 移動 X 軸
+    player.x += player.vx;
+    if (player.x < 0) player.x = 0;
+
+    // 移動平台更新
+    platforms.forEach(p => {
+        if (p.type === 'moving') {
+            p.y += p.speed * p.dir;
+            if (Math.abs(p.y - p.startY) > p.range) p.dir *= -1;
+        }
+    });
+
+    // 平台 Y 軸碰撞
+    player.y += player.vy;
+    let landed = false;
+
+    for (let p of platforms) {
+        if (
+            player.x + player.width > p.x &&
+            player.x < p.x + p.w &&
+            player.y + player.height >= p.y &&
+            player.y + player.height - player.vy <= p.y + 12
+        ) {
+            player.y = p.y - player.height;
+            player.vy = 0;
+            player.isGrounded = true;
+            landed = true;
+            
+            // 著地時重置 5 段跳
+            if (player.jumpsLeft !== MAX_JUMPS) {
+                player.jumpsLeft = MAX_JUMPS;
+                updateJumpHUD();
+            }
+
+            if (p.type === 'moving') {
+                player.y += p.speed * p.dir;
+            }
+        }
+    }
+
+    if (!landed) {
+        player.isGrounded = false;
+    }
+
+    // 彈跳墊
+    for (let pad of pads) {
+        if (
+            player.x + player.width > pad.x &&
+            player.x < pad.x + pad.w &&
+            player.y + player.height >= pad.y &&
+            player.y < pad.y + pad.h
+        ) {
+            player.vy = -14;
+            // 踩到彈跳墊額外獎勵重置跳躍次數
+            player.jumpsLeft = MAX_JUMPS;
+            updateJumpHUD();
+        }
+    }
+
+    // 尖刺
+    for (let s of spikes) {
+        if (
+            player.x + player.width - 4 > s.x &&
+            player.x + 4 < s.x + s.w &&
+            player.y + player.height > s.y &&
+            player.y < s.y + s.h
+        ) {
+            gameOver();
+            return;
+        }
+    }
+
+    // 掉入底層
+    if (player.y > canvas.height + 100) {
+        gameOver();
+        return;
+    }
+
+    // 通關
+    if (
+        goal &&
+        player.x + player.width > goal.x &&
+        player.x < goal.x + goal.w &&
+        player.y + player.height > goal.y
+    ) {
+        levelComplete();
+    }
+}
+
+// 繪製畫面
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    let cameraX = player.x - 150;
+    if (cameraX < 0) cameraX = 0;
+
+    ctx.save();
+    ctx.translate(-cameraX, 0);
+
+    // 繪製平台
+    platforms.forEach(p => {
+        ctx.fillStyle = p.type === 'moving' ? '#ab47bc' : '#303f9f';
+        ctx.fillRect(p.x, p.y, p.w, p.h);
+        ctx.strokeStyle = '#7986cb';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(p.x, p.y, p.w, p.h);
+    });
+
+    // 彈跳墊
+    pads.forEach(pad => {
+        ctx.fillStyle = '#ffeb3b';
+        ctx.fillRect(pad.x, pad.y, pad.w, pad.h);
+    });
+
+    // 尖刺
+    spikes.forEach(s => {
+        ctx.fillStyle = '#f44336';
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y + s.h);
+        ctx.lineTo(s.x + s.w / 2, s.y);
+        ctx.lineTo(s.x + s.w, s.y + s.h);
+        ctx.closePath();
+        ctx.fill();
+    });
+
+    // 終點
+    if (goal) {
+        ctx.fillStyle = '#4caf50';
+        ctx.fillRect(goal.x, goal.y, goal.w, goal.h);
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText('GOAL', goal.x + 0, goal.y - 8);
+    }
+
+    // 玩家 (附帶空中剩餘跳躍提示點點)
+    ctx.fillStyle = player.color;
+    ctx.fillRect(player.x, player.y, player.width, player.height);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(player.x, player.y, player.width, player.height);
+
+    // 在玩家上方繪製空中跳躍點數指標
+    for (let i = 0; i < player.jumpsLeft; i++) {
+        ctx.fillStyle = '#ffb74d';
+        ctx.beginPath();
+        ctx.arc(player.x + 3 + i * 5, player.y - 8, 2, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+function gameLoop() {
+    if (isPlaying) {
+        update();
+        draw();
+        animationFrameId = requestAnimationFrame(gameLoop);
+    }
+}
+
+// 鍵盤觸發事件（跳躍改為按下時立即判定，防止長按連發）
+window.addEventListener('keydown', e => {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+
+    if ((e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space') && !keys.upPressed) {
+        keys.upPressed = true;
+        if (isPlaying) {
+            performJump();
+        }
+    }
+});
+
+window.addEventListener('keyup', e => {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+    if (e.code === 'ArrowUp' || e.code === 'KeyW' || e.code === 'Space') keys.upPressed = false;
+});
+
+// 初始化選單
+showMainMenu();
+</script>
+
+</body>
+</html>

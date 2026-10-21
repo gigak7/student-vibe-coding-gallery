@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emoji 太空侵略者 5.0 - 商店與成就版</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #090d16;
+      color: #ffffff;
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+      user-select: none;
+    }
+    h1 {
+      margin-bottom: 10px;
+      font-size: 26px;
+      letter-spacing: 1.5px;
+      text-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+    }
+    #game-container { position: relative; }
+    canvas {
+      border: 3px solid #334155;
+      border-radius: 12px;
+      background: radial-gradient(circle at center, #1e1b4b 0%, #030712 100%);
+      box-shadow: 0 0 30px rgba(99, 102, 241, 0.3);
+    }
+    .instructions {
+      margin-top: 12px;
+      font-size: 14px;
+      color: #94a3b8;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>👾 EMOJI 太空侵略者 5.0 🚀</h1>
+  <div id="game-container">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+  </div>
+  <div class="instructions">
+    操作說明：<b>← / →</b> 或 <b>A / D</b> 移動火箭，<b>空白鍵</b> 射擊。選單中使用數字鍵 <b>1 ~ 5</b> 操作。
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const MAX_STAGE = 10;
+
+    // --- Web Audio API 音效合成器 ---
+    let audioCtx = null;
+    function initAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playSound(type) {
+      if (!audioCtx) return;
+      const now = audioCtx.currentTime;
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      if (type === 'shoot') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(850, now);
+        osc.frequency.exponentialRampToValueAtTime(150, now + 0.1);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(now + 0.1);
+      } else if (type === 'explosion') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.2);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(now + 0.2);
+      } else if (type === 'hit') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(350, now);
+        osc.frequency.linearRampToValueAtTime(60, now + 0.3);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(now + 0.3);
+      } else if (type === 'achievement') {
+        [587.33, 739.99, 880, 1174.66].forEach((freq, idx) => {
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.type = 'sine';
+          o.frequency.setValueAtTime(freq, now + idx * 0.08);
+          g.gain.setValueAtTime(0.15, now + idx * 0.08);
+          g.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.25);
+          o.connect(g); g.connect(audioCtx.destination);
+          o.start(now + idx * 0.08); o.stop(now + idx * 0.08 + 0.25);
+        });
+      } else if (type === 'buy') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.linearRampToValueAtTime(1046.50, now + 0.15);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(now + 0.15);
+      }
+    }
+
+    // --- 存儲數據管理 ---
+    let coins = parseInt(localStorage.getItem('emoji_invaders_coins')) || 0;
+    let stageHigh = parseInt(localStorage.getItem('emoji_invaders_stage_high')) || 0;
+    let endlessHigh = parseInt(localStorage.getItem('emoji_invaders_endless_high')) || 0;
+    let totalKills = parseInt(localStorage.getItem('emoji_invaders_total_kills')) || 0;
+
+    let upgrades = JSON.parse(localStorage.getItem('emoji_invaders_upgrades')) || {
+      speedLvl: 0,
+      cooldownLvl: 0,
+      doubleShot: false,
+      extraHp: false,
+      shield: false
+    };
+
+    let achievements = JSON.parse(localStorage.getItem('emoji_invaders_achievements')) || {};
+
+    const ACHIEVEMENT_LIST = [
+      { id: 'first_blood', icon: '💥', name: '首殺誕生', desc: '第一次擊殺外星人' },
+      { id: 'rich_man', icon: '💰', name: '大富翁', desc: '累積獲得 100 金幣' },
+      { id: 'shopper', icon: '🛍️', name: '裝備升級', desc: '在商店購買任意 1 個升級' },
+      { id: 'double_fire', icon: '🔫', name: '火力全開', desc: '購買解鎖「雙重雷射」' },
+      { id: 'alien_slayer', icon: '🎯', name: '外星剋星', desc: '累計擊殺 100 隻外星人' },
+      { id: 'stage_master', icon: '🏆', name: '遠征征服者', desc: '成功通關關卡模式 (Stage 10)' },
+      { id: 'no_damage', icon: '👑', name: '無傷大師', desc: '以滿血狀態完成任意 1 關' },
+      { id: 'overlord', icon: '♾️', name: '宇宙霸主', desc: '在無限模式達到 1000 分' }
+    ];
+
+    // 即時成就提示 Toast
+    let activeToast = null;
+    function unlockAchievement(id) {
+      if (achievements[id]) return;
+      achievements[id] = true;
+      localStorage.setItem('emoji_invaders_achievements', JSON.stringify(achievements));
+
+      const ach = ACHIEVEMENT_LIST.find(a => a.id === id);
+      if (ach) {
+        playSound('achievement');
+        activeToast = { text: `${ach.icon} 解鎖成就：${ach.name}`, timer: 180 };
+      }
+    }
+
+    function saveUpgrades() {
+      localStorage.setItem('emoji_invaders_upgrades', JSON.stringify(upgrades));
+    }
+
+    function addCoins(amount) {
+      coins += amount;
+      localStorage.setItem('emoji_invaders_coins', coins);
+      if (coins >= 100) unlockAchievement('rich_man');
+    }
+
+    // --- 遊戲狀態 ---
+    let gameState = 'MENU';
+    let gameMode = 'STAGE';
+
+    let score = 0;
+    let lives = 3;
+    let shieldActive = false;
+    let currentLevel = 1;
+    let lastShootTime = 0;
+    let bonusScore = 0;
+    let finalRank = 'S';
+
+    const keys = {};
+    window.addEventListener('keydown', (e) => {
+      initAudio();
+      keys[e.code] = true;
+
+      if (gameState === 'MENU') {
+        if (e.code === 'Digit1' || e.code === 'Numpad1') startGame('STAGE');
+        else if (e.code === 'Digit2' || e.code === 'Numpad2') startGame('ENDLESS');
+        else if (e.code === 'Digit3' || e.code === 'Numpad3') gameState = 'SHOP';
+        else if (e.code === 'Digit4' || e.code === 'Numpad4') gameState = 'ACHIEVEMENTS';
+      } else if (gameState === 'SHOP') {
+        handleShopInput(e.code);
+        if (e.code === 'KeyB' || e.code === 'Escape') gameState = 'MENU';
+      } else if (gameState === 'ACHIEVEMENTS') {
+        if (e.code === 'KeyB' || e.code === 'Escape' || e.code === 'KeyR') gameState = 'MENU';
+      } else if (gameState === 'STAGE_CLEAR' && e.code === 'Space') {
+        nextStage();
+      } else if ((gameState === 'GAME_OVER' || gameState === 'GAME_VICTORY') && e.code === 'KeyR') {
+        gameState = 'MENU';
+      }
+    });
+
+    window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+    // 玩家火箭
+    const player = {
+      x: canvas.width / 2 - 20,
+      y: 530,
+      width: 40,
+      height: 40,
+      speed: 7,
+      emoji: '🚀'
+    };
+
+    let playerBullets = [];
+    let alienBullets = [];
+    let explosions = [];
+    let waves = [];
+
+    const groupEmojis = [
+      ['🛸', '👾'],
+      ['👽', '🤖']
+    ];
+
+    function initAliens() {
+      const baseSpeed = 1.0 + (currentLevel - 1) * 0.35;
+      waves = [
+        { dir: 1, speed: baseSpeed, aliens: [] },
+        { dir: -1, speed: baseSpeed, aliens: [] }
+      ];
+
+      const startX = 80;
+      const spacingX = 75;
+      const spacingY = 45;
+      const isBossStage = (gameMode === 'STAGE' && currentLevel === MAX_STAGE);
+
+      for (let r = 0; r < 2; r++) {
+        for (let c = 0; c < 8; c++) {
+          let emoji = groupEmojis[0][r];
+          if (isBossStage && r === 0 && (c === 3 || c === 4)) emoji = '👑';
+
+          waves[0].aliens.push({
+            x: startX + c * spacingX,
+            y: 50 + r * spacingY,
+            width: 36,
+            height: 36,
+            emoji: emoji,
+            alive: true,
+            col: c
+          });
+        }
+      }
+
+      for (let r = 0; r < 2; r++) {
+        for (let c = 0; c < 8; c++) {
+          waves[1].aliens.push({
+            x: startX + c * spacingX,
+            y: 150 + r * spacingY,
+            width: 36,
+            height: 36,
+            emoji: groupEmojis[1][r],
+            alive: true,
+            col: c
+          });
+        }
+      }
+    }
+
+    function startGame(mode) {
+      gameMode = mode;
+      score = 0;
+      lives = upgrades.extraHp ? 4 : 3;
+      shieldActive = upgrades.shield;
+      currentLevel = 1;
+      bonusScore = 0;
+
+      player.speed = 7 + upgrades.speedLvl * 1.2;
+      player.x = canvas.width / 2 - 20;
+
+      playerBullets = [];
+      alienBullets = [];
+      explosions = [];
+      initAliens();
+      gameState = 'PLAYING';
+    }
+
+    function nextStage() {
+      currentLevel++;
+      player.x = canvas.width / 2 - 20;
+      playerBullets = [];
+      alienBullets = [];
+      explosions = [];
+      initAliens();
+      gameState = 'PLAYING';
+    }
+
+    function handleShopInput(code) {
+      if (code === 'Digit1' || code === 'Numpad1') {
+        const cost = (upgrades.speedLvl + 1) * 40;
+        if (upgrades.speedLvl < 3 && coins >= cost) {
+          addCoins(-cost); upgrades.speedLvl++; saveUpgrades(); playSound('buy'); unlockAchievement('shopper');
+        }
+      } else if (code === 'Digit2' || code === 'Numpad2') {
+        const cost = (upgrades.cooldownLvl + 1) * 50;
+        if (upgrades.cooldownLvl < 3 && coins >= cost) {
+          addCoins(-cost); upgrades.cooldownLvl++; saveUpgrades(); playSound('buy'); unlockAchievement('shopper');
+        }
+      } else if (code === 'Digit3' || code === 'Numpad3') {
+        if (!upgrades.doubleShot && coins >= 150) {
+          addCoins(-150); upgrades.doubleShot = true; saveUpgrades(); playSound('buy'); unlockAchievement('shopper'); unlockAchievement('double_fire');
+        }
+      } else if (code === 'Digit4' || code === 'Numpad4') {
+        if (!upgrades.extraHp && coins >= 120) {
+          addCoins(-120); upgrades.extraHp = true; saveUpgrades(); playSound('buy'); unlockAchievement('shopper');
+        }
+      } else if (code === 'Digit5' || code === 'Numpad5') {
+        if (!upgrades.shield && coins >= 100) {
+          addCoins(-100); upgrades.shield = true; saveUpgrades(); playSound('buy'); unlockAchievement('shopper');
+        }
+      }
+    }
+
+    function isColliding(a, b) {
+      return (a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y);
+    }
+
+    function addExplosion(x, y) {
+      explosions.push({ x: x, y: y, life: 14, maxLife: 14 });
+    }
+
+    function update(now) {
+      if (gameState !== 'PLAYING') return;
+
+      if ((keys['ArrowLeft'] || keys['KeyA']) && player.x > 10) player.x -= player.speed;
+      if ((keys['ArrowRight'] || keys['KeyD']) && player.x + player.width < canvas.width - 10) player.x += player.speed;
+
+      const currentCooldown = 180 - upgrades.cooldownLvl * 30;
+      if (keys['Space'] && now - lastShootTime > currentCooldown) {
+        if (upgrades.doubleShot) {
+          playerBullets.push({ x: player.x + 6, y: player.y, width: 5, height: 14, speed: 9.5 });
+          playerBullets.push({ x: player.x + player.width - 11, y: player.y, width: 5, height: 14, speed: 9.5 });
+        } else {
+          playerBullets.push({ x: player.x + player.width / 2 - 2.5, y: player.y, width: 5, height: 14, speed: 9.5 });
+        }
+        playSound('shoot');
+        lastShootTime = now;
+      }
+
+      for (let i = playerBullets.length - 1; i >= 0; i--) {
+        const pb = playerBullets[i];
+        pb.y -= pb.speed;
+        if (pb.y < -20) playerBullets.splice(i, 1);
+      }
+
+      let allAliens = [];
+      waves.forEach(w => allAliens.push(...w.aliens));
+      let aliveAliens = allAliens.filter(a => a.alive);
+
+      if (aliveAliens.length === 0) {
+        addCoins(20);
+        if (lives === (upgrades.extraHp ? 4 : 3)) unlockAchievement('no_damage');
+
+        if (gameMode === 'STAGE') {
+          if (currentLevel === MAX_STAGE) {
+            bonusScore = lives * 50;
+            score += bonusScore;
+            finalRank = lives >= 3 ? 'S' : (lives === 2 ? 'A' : 'B');
+            if (score > stageHigh) { stageHigh = score; localStorage.setItem('emoji_invaders_stage_high', stageHigh); }
+            unlockAchievement('stage_master');
+            gameState = 'GAME_VICTORY';
+          } else {
+            gameState = 'STAGE_CLEAR';
+          }
+        } else {
+          currentLevel++;
+          initAliens();
+        }
+        return;
+      }
+
+      waves.forEach(wave => {
+        let activeAliens = wave.aliens.filter(a => a.alive);
+        let moveDown = false;
+
+        for (let alien of activeAliens) {
+          alien.x += wave.dir * wave.speed;
+          if (alien.x <= 15 || alien.x + alien.width >= canvas.width - 15) moveDown = true;
+        }
+
+        if (moveDown) {
+          wave.dir *= -1;
+          wave.speed += 0.2 + (currentLevel - 1) * 0.04;
+          for (let alien of activeAliens) {
+            alien.y += 20;
+            if (alien.y + alien.height >= player.y) gameState = 'GAME_OVER';
+          }
+        }
+      });
+
+      const fireProbability = 0.02 + (currentLevel - 1) * 0.007;
+      if (aliveAliens.length > 0 && Math.random() < fireProbability) {
+        const lowestAliens = [];
+        for (let c = 0; c < 8; c++) {
+          const colAliens = aliveAliens.filter(a => a.col === c);
+          if (colAliens.length > 0) {
+            lowestAliens.push(colAliens.reduce((prev, curr) => (curr.y > prev.y ? curr : prev)));
+          }
+        }
+
+        if (lowestAliens.length > 0) {
+          const shooter = lowestAliens[Math.floor(Math.random() * lowestAliens.length)];
+          alienBullets.push({
+            x: shooter.x + shooter.width / 2 - 3,
+            y: shooter.y + shooter.height,
+            width: 6,
+            height: 15,
+            speed: 4.5 + (currentLevel - 1) * 0.4
+          });
+        }
+      }
+
+      for (let i = alienBullets.length - 1; i >= 0; i--) {
+        const ab = alienBullets[i];
+        ab.y += ab.speed;
+
+        if (isColliding(ab, player)) {
+          alienBullets = [];
+          if (shieldActive) {
+            shieldActive = false;
+            addExplosion(player.x, player.y);
+            playSound('hit');
+          } else {
+            lives--;
+            addExplosion(player.x, player.y);
+            playSound('hit');
+            if (lives <= 0) gameState = 'GAME_OVER';
+          }
+          break;
+        }
+        if (ab.y > canvas.height + 20) alienBullets.splice(i, 1);
+      }
+
+      for (let i = playerBullets.length - 1; i >= 0; i--) {
+        const pb = playerBullets[i];
+        for (let alien of aliveAliens) {
+          if (isColliding(pb, alien)) {
+            alien.alive = false;
+            addExplosion(alien.x, alien.y);
+            playSound('explosion');
+
+            score += 10;
+            addCoins(1);
+            totalKills++;
+            localStorage.setItem('emoji_invaders_total_kills', totalKills);
+
+            unlockAchievement('first_blood');
+            if (totalKills >= 100) unlockAchievement('alien_slayer');
+
+            if (gameMode === 'STAGE' && score > stageHigh) {
+              stageHigh = score; localStorage.setItem('emoji_invaders_stage_high', stageHigh);
+            } else if (gameMode === 'ENDLESS') {
+              if (score > endlessHigh) { endlessHigh = score; localStorage.setItem('emoji_invaders_endless_high', endlessHigh); }
+              if (score >= 1000) unlockAchievement('overlord');
+            }
+
+            playerBullets.splice(i, 1);
+            break;
+          }
+        }
+      }
+
+      for (let i = explosions.length - 1; i >= 0; i--) {
+        explosions[i].life--;
+        if (explosions[i].life <= 0) explosions.splice(i, 1);
+      }
+    }
+
+    // --- 畫面繪製 ---
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      if (gameState === 'MENU') { drawMenu(); return; }
+      if (gameState === 'SHOP') { drawShop(); return; }
+      if (gameState === 'ACHIEVEMENTS') { drawAchievements(); return; }
+
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
+      ctx.setLineDash([8, 8]);
+      ctx.beginPath();
+      ctx.moveTo(0, player.y + player.height);
+      ctx.lineTo(canvas.width, player.y + player.height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.font = '36px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(player.emoji, player.x, player.y);
+
+      if (shieldActive) {
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(player.x + player.width / 2, player.y + player.height / 2, 26, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.font = '34px sans-serif';
+      waves.forEach(wave => {
+        for (let alien of wave.aliens) {
+          if (alien.alive) ctx.fillText(alien.emoji, alien.x, alien.y);
+        }
+      });
+
+      ctx.fillStyle = '#38bdf8';
+      ctx.shadowColor = '#0284c7'; ctx.shadowBlur = 8;
+      for (let pb of playerBullets) ctx.fillRect(pb.x, pb.y, pb.width, pb.height);
+      ctx.shadowBlur = 0;
+
+      ctx.fillStyle = '#f43f5e';
+      ctx.shadowColor = '#e11d48'; ctx.shadowBlur = 6;
+      for (let ab of alienBullets) ctx.fillRect(ab.x, ab.y, ab.width, ab.height);
+      ctx.shadowBlur = 0;
+
+      for (let exp of explosions) {
+        ctx.font = `${28 + (14 - exp.life)}px sans-serif`;
+        ctx.globalAlpha = exp.life / exp.maxLife;
+        ctx.fillText('💥', exp.x - 5, exp.y - 5);
+        ctx.globalAlpha = 1.0;
+      }
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 18px system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(`SCORE: ${score}`, 15, 25);
+      ctx.fillText(`💰 ${coins}`, 150, 25);
+
+      const label = gameMode === 'STAGE' ? `STAGE ${currentLevel}/${MAX_STAGE}` : `WAVE ${currentLevel}`;
+      ctx.fillText(label, 260, 25);
+
+      const hearts = '❤️'.repeat(Math.max(0, lives));
+      ctx.textAlign = 'right';
+      ctx.fillText(`${shieldActive ? '🛡️ ' : ''}HP: ${hearts}`, canvas.width - 15, 25);
+
+      if (activeToast) {
+        drawToast();
+        activeToast.timer--;
+        if (activeToast.timer <= 0) activeToast = null;
+      }
+
+      if (gameState === 'STAGE_CLEAR') {
+        drawOverlay('#10b981', `STAGE ${currentLevel} CLEAR!`, `得分: ${score}  |  獲得通關金幣 +20 💰`, '按 [空白鍵] 進入下一關');
+      } else if (gameState === 'GAME_VICTORY') {
+        drawVictoryOverlay();
+      } else if (gameState === 'GAME_OVER') {
+        const modeTitle = gameMode === 'STAGE' ? '關卡模式' : '無限模式';
+        drawOverlay('#ef4444', 'GAME OVER', `${modeTitle} 最終得分: ${score}`, '按 [R] 鍵返回選單');
+      }
+    }
+
+    function drawToast() {
+      ctx.fillStyle = 'rgba(30, 41, 59, 0.95)';
+      ctx.strokeStyle = '#f59e0b';
+      ctx.lineWidth = 2;
+      ctx.fillRect(canvas.width / 2 - 180, 50, 360, 45);
+      ctx.strokeRect(canvas.width / 2 - 180, 50, 360, 45);
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'bold 18px sans-serif';
+      ctx.fillText(activeToast.text, canvas.width / 2, 78);
+    }
+
+    function drawMenu() {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#6366f1';
+      ctx.font = 'bold 42px sans-serif';
+      ctx.fillText('EMOJI 太空侵略者 5.0', canvas.width / 2, 120);
+
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.fillText(`持有金幣: 💰 ${coins}`, canvas.width / 2, 165);
+
+      drawMenuBox(canvas.width / 2 - 240, 200, 220, 140, '#38bdf8', '按 [1] 關卡模式', `共 ${MAX_STAGE} 關 / 最高分: ${stageHigh}`);
+      drawMenuBox(canvas.width / 2 + 20, 200, 220, 140, '#f43f5e', '按 [2] 無限模式', `無限刷怪 / 最高分: ${endlessHigh}`);
+
+      drawMenuBox(canvas.width / 2 - 240, 360, 220, 130, '#10b981', '按 [3] 道具商店 🏪', '升級速度/連發/雙重雷射');
+      drawMenuBox(canvas.width / 2 + 20, 360, 220, 130, '#f59e0b', '按 [4] 成就紀錄 🏆', `已解鎖: ${Object.keys(achievements).length}/${ACHIEVEMENT_LIST.length}`);
+
+      ctx.fillStyle = '#64748b';
+      ctx.font = '16px sans-serif';
+      ctx.fillText('按鍵盤數字 1、2、3、4 進入對應功能', canvas.width / 2, 535);
+    }
+
+    function drawMenuBox(x, y, w, h, color, title, desc) {
+      ctx.fillStyle = '#1e293b';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeRect(x, y, w, h);
+
+      ctx.fillStyle = color;
+      ctx.font = 'bold 22px sans-serif';
+      ctx.fillText(title, x + w / 2, y + 40);
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '14px sans-serif';
+      ctx.fillText(desc, x + w / 2, y + 80);
+    }
+
+    function drawShop() {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#10b981';
+      ctx.font = 'bold 36px sans-serif';
+      ctx.fillText('🏪 道具商店', canvas.width / 2, 80);
+
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'bold 20px sans-serif';
+      ctx.fillText(`擁有金幣: 💰 ${coins}`, canvas.width / 2, 120);
+
+      const shopItems = [
+        { key: '1', name: '🚀 火箭推進器 (+速度)', lvl: `${upgrades.speedLvl}/3`, cost: (upgrades.speedLvl + 1) * 40, max: upgrades.speedLvl >= 3 },
+        { key: '2', name: '⚡ 快速連發 (-射擊冷卻)', lvl: `${upgrades.cooldownLvl}/3`, cost: (upgrades.cooldownLvl + 1) * 50, max: upgrades.cooldownLvl >= 3 },
+        { key: '3', name: '🔫 雙重雷射 (一次發射2發)', lvl: upgrades.doubleShot ? '已解鎖' : '未解鎖', cost: 150, max: upgrades.doubleShot },
+        { key: '4', name: '❤️ 裝甲強化 (初始4條命)', lvl: upgrades.extraHp ? '已解鎖' : '未解鎖', cost: 120, max: upgrades.extraHp },
+        { key: '5', name: '🛡️ 光能護盾 (抵擋1次傷害)', lvl: upgrades.shield ? '已解鎖' : '未解鎖', cost: 100, max: upgrades.shield }
+      ];
+
+      shopItems.forEach((item, idx) => {
+        const y = 175 + idx * 65;
+        ctx.fillStyle = '#1e293b';
+        ctx.strokeStyle = item.max ? '#64748b' : '#10b981';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(100, y, 600, 52);
+        ctx.strokeRect(100, y, 600, 52);
+
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 18px sans-serif';
+        ctx.fillText(`按 [${item.key}] ${item.name}`, 120, y + 32);
+
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '16px sans-serif';
+        ctx.fillText(`[${item.lvl}]`, 520, y + 32);
+
+        ctx.fillStyle = item.max ? '#64748b' : '#fbbf24';
+        ctx.fillText(item.max ? '已達上限' : `💰 ${item.cost}`, 670, y + 32);
+      });
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '16px sans-serif';
+      ctx.fillText('按 [B] 或 [ESC] 鍵返回主選單', canvas.width / 2, 545);
+    }
+
+    function drawAchievements() {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#f59e0b';
+      ctx.font = 'bold 36px sans-serif';
+      ctx.fillText('🏆 成就紀錄', canvas.width / 2, 70);
+
+      const unlockedCount = Object.keys(achievements).length;
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '18px sans-serif';
+      ctx.fillText(`解鎖進度：${unlockedCount} / ${ACHIEVEMENT_LIST.length}`, canvas.width / 2, 105);
+
+      ACHIEVEMENT_LIST.forEach((ach, idx) => {
+        const col = idx % 2;
+        const row = Math.floor(idx / 2);
+        const x = 70 + col * 340;
+        const y = 140 + row * 90;
+        const isUnlocked = !!achievements[ach.id];
+
+        ctx.fillStyle = isUnlocked ? '#1e293b' : '#0f172a';
+        ctx.strokeStyle = isUnlocked ? '#f59e0b' : '#334155';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(x, y, 320, 75);
+        ctx.strokeRect(x, y, 320, 75);
+
+        ctx.textAlign = 'left';
+        ctx.font = '28px sans-serif';
+        ctx.fillText(isUnlocked ? ach.icon : '🔒', x + 15, y + 48);
+
+        ctx.fillStyle = isUnlocked ? '#ffffff' : '#64748b';
+        ctx.font = 'bold 17px sans-serif';
+        ctx.fillText(ach.name, x + 60, y + 32);
+
+        ctx.fillStyle = isUnlocked ? '#94a3b8' : '#475569';
+        ctx.font = '13px sans-serif';
+        ctx.fillText(ach.desc, x + 60, y + 56);
+      });
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '16px sans-serif';
+      ctx.fillText('按 [B] 或 [ESC] 鍵返回主選單', canvas.width / 2, 545);
+    }
+
+    function drawVictoryOverlay() {
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#f59e0b';
+      ctx.font = 'bold 44px sans-serif';
+      ctx.fillText('🏆 任務成功！星系拯救者 🏆', canvas.width / 2, canvas.height / 2 - 80);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '22px sans-serif';
+      ctx.fillText(`成功擊退全部 ${MAX_STAGE} 關外星人侵略者！`, canvas.width / 2, canvas.height / 2 - 20);
+      ctx.fillText(`剩餘血量加分: +${bonusScore} 分`, canvas.width / 2, canvas.height / 2 + 20);
+      ctx.fillText(`最終總得分: ${score}`, canvas.width / 2, canvas.height / 2 + 60);
+
+      ctx.fillStyle = '#10b981';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.fillText(`通關評級: 【 ${finalRank} 級 】`, canvas.width / 2, canvas.height / 2 + 105);
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '16px sans-serif';
+      ctx.fillText('按 [R] 鍵返回主選單', canvas.width / 2, canvas.height / 2 + 155);
+    }
+
+    function drawOverlay(color, title, subtitle, hint) {
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.textAlign = 'center';
+      ctx.fillStyle = color;
+      ctx.font = 'bold 48px sans-serif';
+      ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 40);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '22px sans-serif';
+      ctx.fillText(subtitle, canvas.width / 2, canvas.height / 2 + 15);
+
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '16px sans-serif';
+      ctx.fillText(hint, canvas.width / 2, canvas.height / 2 + 65);
+    }
+
+    function gameLoop(timestamp) {
+      update(timestamp);
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>

@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>太空射擊遊戲 - 2778</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0b0d17;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        h1 { margin: 5px 0; font-size: 24px; color: #00e5ff; }
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.4);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        canvas { background: #000000; display: block; }
+        .instructions {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #aaa;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🚀 太空射擊《2778》👾</h1>
+    <div id="game-container">
+        <canvas id="gameCanvas" width="480" height="640"></canvas>
+    </div>
+    <div class="instructions">
+        操作說明：方向鍵 [←] [→] 或 [A] [D] 移動 ｜ [空白鍵 Space] 發射子彈
+    </div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// --- 遊戲狀態變數 ---
+let score = 0;
+let gameOver = false;
+let gameWin = false;
+let wave = 1;
+const maxWaves = 5;
+
+// --- 玩家設定 ---
+const player = {
+    x: canvas.width / 2 - 20,
+    y: canvas.height - 60,
+    width: 40,
+    height: 40,
+    speed: 5,
+    hp: 3,
+    maxHp: 3,
+    shield: false,
+    shieldTimer: 0,
+    doubleShotTimer: 0
+};
+
+// --- 控制鍵狀態 ---
+const keys = {};
+
+window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if (e.code === 'Space') e.preventDefault();
+    if ((gameOver || gameWin) && e.code === 'KeyR') resetGame();
+});
+
+window.addEventListener('keyup', e => {
+    keys[e.code] = false;
+});
+
+// --- 物件陣列 ---
+let playerBullets = [];
+let enemyBullets = [];
+let enemies = [];
+let powerUps = [];
+
+// --- 敵人類型說明 ---
+// 1. 普通外星人 👾 (10分)
+// 2. 快速外星人 🛸 (20分)
+// 3. 大型/Boss外星人 👹 (波次 5 出現, 500分)
+
+function spawnWave(waveNum) {
+    enemies = [];
+    if (waveNum === 5) {
+        // Boss 關卡
+        enemies.push({
+            x: canvas.width / 2 - 40,
+            y: 50,
+            width: 80,
+            height: 80,
+            speedX: 2,
+            speedY: 0,
+            hp: 50,
+            maxHp: 50,
+            type: 'boss',
+            scoreValue: 500,
+            shootInterval: 40,
+            shootTimer: 0
+        });
+        return;
+    }
+
+    const rows = 2 + waveNum;
+    const cols = 6;
+    for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+            const isFast = Math.random() < 0.3;
+            enemies.push({
+                x: 45 + c * 65,
+                y: 40 + r * 45,
+                width: 32,
+                height: 32,
+                speedX: (1 + waveNum * 0.3) * (r % 2 === 0 ? 1 : -1),
+                speedY: 0.1,
+                hp: isFast ? 1 : 2,
+                maxHp: isFast ? 1 : 2,
+                type: isFast ? 'fast' : 'normal',
+                scoreValue: isFast ? 20 : 10,
+                shootInterval: Math.floor(Math.random() * 100) + 120,
+                shootTimer: 0
+            });
+        }
+    }
+}
+
+function spawnPowerUp(x, y) {
+    const types = ['double', 'shield', 'bomb'];
+    const randType = types[Math.floor(Math.random() * types.length)];
+    powerUps.push({
+        x: x,
+        y: y,
+        width: 20,
+        height: 20,
+        type: randType,
+        speedY: 2
+    });
+}
+
+// --- 子彈冷卻控制 ---
+let shootCooldown = 0;
+
+function update() {
+    if (gameOver || gameWin) return;
+
+    // 1. 玩家移動
+    if ((keys['ArrowLeft'] || keys['KeyA']) && player.x > 0) {
+        player.x -= player.speed;
+    }
+    if ((keys['ArrowRight'] || keys['KeyD']) && player.x + player.width < canvas.width) {
+        player.x += player.speed;
+    }
+
+    // 狀態計時器更新
+    if (player.doubleShotTimer > 0) player.doubleShotTimer--;
+    if (player.shieldTimer > 0) {
+        player.shieldTimer--;
+        if (player.shieldTimer === 0) player.shield = false;
+    }
+
+    // 2. 發射子彈
+    if (shootCooldown > 0) shootCooldown--;
+    if (keys['Space'] && shootCooldown === 0) {
+        if (player.doubleShotTimer > 0) {
+            playerBullets.push({ x: player.x + 8, y: player.y, speedY: -8, width: 4, height: 10 });
+            playerBullets.push({ x: player.x + player.width - 12, y: player.y, speedY: -8, width: 4, height: 10 });
+        } else {
+            playerBullets.push({ x: player.x + player.width / 2 - 2, y: player.y, speedY: -8, width: 4, height: 10 });
+        }
+        shootCooldown = 12;
+    }
+
+    // 3. 更新玩家子彈
+    playerBullets.forEach((bullet, bIndex) => {
+        bullet.y += bullet.speedY;
+        if (bullet.y < 0) playerBullets.splice(bIndex, 1);
+    });
+
+    // 4. 更新敵方子彈
+    enemyBullets.forEach((eBullet, ebIndex) => {
+        eBullet.y += eBullet.speedY;
+        // 檢測撞擊玩家
+        if (checkCollision(eBullet, player)) {
+            enemyBullets.splice(ebIndex, 1);
+            hitPlayer();
+        } else if (eBullet.y > canvas.height) {
+            enemyBullets.splice(ebIndex, 1);
+        }
+    });
+
+    // 5. 更新道具
+    powerUps.forEach((p, pIndex) => {
+        p.y += p.speedY;
+        if (checkCollision(p, player)) {
+            if (p.type === 'double') player.doubleShotTimer = 300; // 5秒雙發
+            if (p.type === 'shield') { player.shield = true; player.shieldTimer = 300; }
+            if (p.type === 'bomb') {
+                // 清屏炸彈：消除畫面所有非Boss敵人與敵方子彈
+                enemies.forEach(e => {
+                    if (e.type !== 'boss') {
+                        score += e.scoreValue;
+                        e.hp = 0;
+                    }
+                });
+                enemyBullets = [];
+            }
+            powerUps.splice(pIndex, 1);
+        } else if (p.y > canvas.height) {
+            powerUps.splice(pIndex, 1);
+        }
+    });
+
+    // 6. 更新敵人狀態
+    for (let eIndex = enemies.length - 1; eIndex >= 0; eIndex--) {
+        const enemy = enemies[eIndex];
+        enemy.x += enemy.speedX;
+        enemy.y += enemy.speedY;
+
+        // 碰壁反彈機制（非 Boss 類型）
+        if (enemy.type !== 'boss' && (enemy.x <= 0 || enemy.x + enemy.width >= canvas.width)) {
+            enemy.speedX *= -1;
+            enemy.y += 10;
+        } else if (enemy.type === 'boss' && (enemy.x <= 0 || enemy.x + enemy.width >= canvas.width)) {
+            enemy.speedX *= -1;
+        }
+
+        // 敵人到達底部或撞擊玩家 -> 失敗條件
+        if (enemy.y + enemy.height >= player.y || checkCollision(enemy, player)) {
+            gameOver = true;
+        }
+
+        // 敵方自動開火
+        enemy.shootTimer++;
+        if (enemy.shootTimer >= enemy.shootInterval) {
+            enemy.shootTimer = 0;
+            if (enemy.type === 'boss') {
+                // Boss 三向子彈
+                enemyBullets.push({ x: enemy.x + 20, y: enemy.y + enemy.height, speedY: 4, width: 6, height: 12 });
+                enemyBullets.push({ x: enemy.x + 40, y: enemy.y + enemy.height, speedY: 5, width: 6, height: 12 });
+                enemyBullets.push({ x: enemy.x + 60, y: enemy.y + enemy.height, speedY: 4, width: 6, height: 12 });
+            } else {
+                enemyBullets.push({ x: enemy.x + enemy.width / 2 - 2, y: enemy.y + enemy.height, speedY: 4, width: 4, height: 8 });
+            }
+        }
+
+        // 玩家子彈擊中敵人檢測
+        playerBullets.forEach((bullet, bIndex) => {
+            if (checkCollision(bullet, enemy)) {
+                playerBullets.splice(bIndex, 1);
+                enemy.hp--;
+                if (enemy.hp <= 0) {
+                    score += enemy.scoreValue;
+                    // 20% 機率掉落道具
+                    if (Math.random() < 0.2) spawnPowerUp(enemy.x, enemy.y);
+                    enemies.splice(eIndex, 1);
+                }
+            }
+        });
+    }
+
+    // 7. 檢查波次晉級或勝利
+    if (enemies.length === 0) {
+        if (wave < maxWaves) {
+            wave++;
+            spawnWave(wave);
+        } else {
+            gameWin = true;
+        }
+    }
+}
+
+function hitPlayer() {
+    if (player.shield) return; // 有護盾時免疫傷害
+    player.hp--;
+    if (player.hp <= 0) {
+        gameOver = true;
+    }
+}
+
+function checkCollision(rect1, rect2) {
+    return rect1.x < rect2.x + rect2.width &&
+           rect1.x + rect1.width > rect2.x &&
+           rect1.y < rect2.y + rect2.height &&
+           rect1.y + rect1.height > rect2.y;
+}
+
+// --- 繪製畫面 ---
+function draw() {
+    // 清空背景
+    ctx.fillStyle = '#050714';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 1. 繪製玩家 (火箭 🚀)
+    ctx.font = '32px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🚀', player.x + player.width/2, player.y + player.height/2);
+
+    // 護盾特效
+    if (player.shield) {
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(player.x + player.width/2, player.y + player.height/2, 28, 0, Math.PI * 2);
+        ctx.stroke();
+    }
+
+    // 2. 繪製玩家子彈
+    ctx.fillStyle = '#ffeb3b';
+    playerBullets.forEach(b => ctx.fillRect(b.x, b.y, b.width, b.height));
+
+    // 3. 繪製敵方子彈
+    ctx.fillStyle = '#ff1744';
+    enemyBullets.forEach(eb => ctx.fillRect(eb.x, eb.y, eb.width, eb.height));
+
+    // 4. 繪製敵人 👾
+    enemies.forEach(e => {
+        if (e.type === 'boss') {
+            ctx.font = '64px serif';
+            ctx.fillText('👹', e.x + e.width/2, e.y + e.height/2);
+            // Boss 血條
+            ctx.fillStyle = '#333';
+            ctx.fillRect(e.x, e.y - 12, e.width, 8);
+            ctx.fillStyle = '#ff1744';
+            ctx.fillRect(e.x, e.y - 12, (e.hp / e.maxHp) * e.width, 8);
+        } else if (e.type === 'fast') {
+            ctx.font = '28px serif';
+            ctx.fillText('🛸', e.x + e.width/2, e.y + e.height/2);
+        } else {
+            ctx.font = '28px serif';
+            ctx.fillText('👾', e.x + e.width/2, e.y + e.height/2);
+        }
+    });
+
+    // 5. 繪製掉落道具
+    powerUps.forEach(p => {
+        let symbol = '🎁';
+        if (p.type === 'double') symbol = '⚡';
+        if (p.type === 'shield') symbol = '🛡️';
+        if (p.type === 'bomb') symbol = '💣';
+        ctx.font = '20px serif';
+        ctx.fillText(symbol, p.x + p.width/2, p.y + p.height/2);
+    });
+
+    // 6. UI 面板資訊
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '16px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`分數: ${score}`, 15, 25);
+    ctx.fillText(`波次: ${wave}/${maxWaves}`, 15, 50);
+    ctx.fillText(`血量: ${'❤️'.repeat(player.hp)}`, canvas.width - 120, 25);
+
+    // 7. 結束與勝利畫面
+    if (gameOver) {
+        drawOverlay('GAME OVER', '#ff1744', '按 R 鍵重新開始');
+    } else if (gameWin) {
+        drawOverlay('MISSION ACCOMPLISHED!', '#00e5ff', `完美通關！最終得分: ${score}\n按 R 鍵重新開始`);
+    }
+}
+
+function drawOverlay(title, color, subtext) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = color;
+    ctx.font = '32px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(title, canvas.width / 2, canvas.height / 2 - 20);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '16px sans-serif';
+    ctx.fillText(subtext, canvas.width / 2, canvas.height / 2 + 30);
+}
+
+function resetGame() {
+    score = 0;
+    wave = 1;
+    gameOver = false;
+    gameWin = false;
+    player.hp = player.maxHp;
+    player.x = canvas.width / 2 - 20;
+    player.shield = false;
+    player.doubleShotTimer = 0;
+    playerBullets = [];
+    enemyBullets = [];
+    powerUps = [];
+    spawnWave(wave);
+}
+
+// 遊戲主迴圈
+function gameLoop() {
+    update();
+    draw();
+    requestAnimationFrame(gameLoop);
+}
+
+// 初始化遊戲
+spawnWave(wave);
+gameLoop();
+</script>
+</body>
+</html>

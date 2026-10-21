@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>雙人競技大亨 3D (Dual Competitive Tycoon 3D)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+    <!-- Three.js CDN with JS fallback -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js';"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Fredoka', 'Noto Sans TC', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Fredoka', 'Noto Sans TC', sans-serif;
+            background-color: #080c14;
+            color: #f8fafc;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        #viewport-container {
+            position: absolute;
+            top: 54px;
+            bottom: 40px;
+            left: 0;
+            right: 0;
+            display: flex;
+            width: 100%;
+            height: calc(100vh - 94px);
+        }
+
+        .player-viewport {
+            position: relative;
+            flex: 1;
+            height: 100%;
+            border-right: 2px solid #1e293b;
+            overflow: hidden;
+        }
+
+        .player-viewport:last-child {
+            border-right: none;
+        }
+
+        /* Floating pop texts */
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translateY(0) scale(1); }
+            50% { opacity: 1; transform: translateY(-35px) scale(1.2); }
+            100% { opacity: 0; transform: translateY(-55px) scale(0.8); }
+        }
+        .pop-text {
+            position: absolute;
+            animation: floatUp 0.85s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+            font-weight: 900;
+            pointer-events: none;
+            z-index: 50;
+            text-shadow: 0 2px 6px rgba(0,0,0,0.9);
+        }
+
+        .smooth-bar { transition: width 0.25s ease-out; }
+
+        .pulse-glow-red {
+            box-shadow: 0 0 15px rgba(225, 29, 72, 0.4);
+        }
+
+        .pulse-glow-blue {
+            box-shadow: 0 0 15px rgba(37, 99, 235, 0.4);
+        }
+    </style>
+</head>
+<body class="w-screen h-screen flex flex-col justify-between">
+
+    <!-- Toast Message Container -->
+    <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- HEADER / TOP COMPETITION BAR -->
+    <header class="h-[54px] bg-slate-900/95 border-b border-slate-800 backdrop-blur-md px-4 flex items-center justify-between z-30 shrink-0">
+        <!-- Title & Timer -->
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-600 p-0.5 shadow-md flex items-center justify-center">
+                <div class="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center text-amber-400 text-base">
+                    <i class="fa-solid fa-trophy"></i>
+                </div>
+            </div>
+            <div>
+                <h1 class="text-sm font-black bg-clip-text text-transparent bg-gradient-to-r from-amber-400 via-rose-400 to-cyan-400">
+                    雙人競技大亨 3D (Versus Tycoon)
+                </h1>
+                <div class="flex items-center gap-2 text-[10px] text-slate-400 font-bold">
+                    <span id="day-text" class="bg-indigo-950 text-indigo-300 border border-indigo-800 px-2 py-0.5 rounded-full">第 1 天</span>
+                    <span id="time-text"><i class="fa-regular fa-clock me-1"></i>09:00 AM</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Target Goal Progress Centerpiece -->
+        <div class="hidden md:flex items-center gap-4 bg-slate-950 border border-slate-800 px-4 py-1.5 rounded-2xl">
+            <div class="text-center">
+                <span class="text-[9px] uppercase text-rose-400 font-extrabold block">P1 赤紅商會</span>
+                <span id="p1-worth-top" class="text-xs font-black text-white">$150</span>
+            </div>
+            <div class="text-xs font-black text-amber-400 px-2 bg-amber-500/10 border border-amber-500/30 rounded-lg py-0.5">
+                目標: <span id="target-goal-text">$3,000</span>
+            </div>
+            <div class="text-center">
+                <span class="text-[9px] uppercase text-cyan-400 font-extrabold block">P2 蔚藍工坊</span>
+                <span id="p2-worth-top" class="text-xs font-black text-white">$150</span>
+            </div>
+        </div>
+
+        <!-- Top Right Action Controls -->
+        <div class="flex items-center gap-2">
+            <button onclick="triggerAuctionModal()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black px-3 py-1.5 rounded-xl shadow transition active:scale-95 flex items-center gap-1">
+                <i class="fa-solid fa-gavel"></i>
+                <span>王國競標會</span>
+            </button>
+            <button onclick="toggleHelpModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-2.5 py-1.5 rounded-xl transition">
+                <i class="fa-solid fa-gamepad"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- DUAL SPLIT VIEWPORTS -->
+    <div id="viewport-container">
+
+        <!-- P1 VIEWPORT (LEFT - RED PLAYER) -->
+        <div id="p1-viewport" class="player-viewport">
+            <!-- P1 HUD Overlay -->
+            <div class="absolute top-3 left-3 right-3 pointer-events-none flex justify-between items-start z-10">
+                <!-- P1 Shop & Hero Badge -->
+                <div class="bg-slate-900/90 border border-rose-500/60 backdrop-blur-md p-2.5 rounded-2xl shadow-xl pointer-events-auto min-w-[180px] pulse-glow-red">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-xs font-black bg-rose-600 text-white px-2 py-0.5 rounded-md">P1 赤紅商會</span>
+                        <span class="text-[10px] text-amber-400 font-bold">Lv.<span id="p1-shop-lvl">1</span> 店鋪</span>
+                    </div>
+
+                    <!-- HP Bar -->
+                    <div class="text-[10px] text-slate-300 flex justify-between font-bold mb-0.5">
+                        <span>戰士體力 HP</span> <span id="p1-hp-text">100 / 100</span>
+                    </div>
+                    <div class="w-full bg-slate-950 rounded-full h-1.5 border border-slate-800 overflow-hidden mb-1.5">
+                        <div id="p1-hp-bar" class="bg-emerald-500 h-full smooth-bar" style="width: 100%"></div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-1 text-[10px] font-bold text-slate-300">
+                        <div><i class="fa-solid fa-boxes-stacked text-amber-400 me-1"></i>庫存: <span id="p1-stock" class="text-white">0</span></div>
+                        <div><i class="fa-solid fa-users text-indigo-400 me-1"></i>顧客: <span id="p1-cust" class="text-white">0</span></div>
+                    </div>
+                </div>
+
+                <!-- P1 Vault & Price Mode -->
+                <div class="flex flex-col gap-1 items-end pointer-events-auto">
+                    <div class="bg-rose-950/90 border border-rose-600/60 backdrop-blur-md px-3 py-1.5 rounded-2xl text-right shadow-xl">
+                        <div class="text-[9px] text-rose-300 font-extrabold uppercase">P1 金幣財富</div>
+                        <div class="text-amber-400 font-black text-base"><i class="fa-solid fa-coins me-1"></i>$<span id="p1-gold">150</span></div>
+                    </div>
+                    <button onclick="cyclePriceStrategy(1)" id="p1-price-btn" class="bg-slate-900/90 border border-slate-700 text-[10px] font-bold text-amber-300 px-2.5 py-1 rounded-xl">
+                        策略: 平價策略
+                    </button>
+                </div>
+            </div>
+
+            <!-- P1 Bottom Control Panel -->
+            <div class="absolute bottom-3 left-3 right-3 pointer-events-none flex justify-between items-end z-10">
+                <!-- Action / Craft Controls for P1 -->
+                <div class="bg-slate-950/90 border border-slate-800 p-2.5 rounded-2xl backdrop-blur-md pointer-events-auto flex flex-col gap-2 max-w-[280px]">
+                    <div class="text-[10px] text-slate-400 font-bold flex justify-between items-center">
+                        <span><i class="fa-solid fa-cubes text-rose-400 me-1"></i>素材: 木<span id="p1-mat-wood">0</span> 水晶<span id="p1-mat-cys">0</span></span>
+                        <button onclick="openWorkshopModal(1)" class="bg-rose-600 hover:bg-rose-500 text-white font-black text-[10px] px-2 py-0.5 rounded-lg">
+                            <i class="fa-solid fa-hammer me-1"></i>工坊
+                        </button>
+                    </div>
+                    <!-- Controls Key Hint -->
+                    <div class="text-[9px] text-slate-400">
+                        <b>WASD</b> 移動 | <b>F</b> 採集/砍擊 | <b>G</b> 補貨 | <b>H</b> 騷擾對方
+                    </div>
+                </div>
+
+                <!-- P1 Action Buttons -->
+                <div class="flex gap-2 pointer-events-auto">
+                    <button onclick="triggerP1Attack()" class="w-11 h-11 bg-rose-600 hover:bg-rose-500 active:scale-95 text-white rounded-2xl shadow-lg flex items-center justify-center font-black text-base border border-rose-400" title="攻擊/採集 (F)">
+                        <i class="fa-solid fa-hand-fist"></i>
+                    </button>
+                    <button onclick="triggerP1Stock()" class="w-11 h-11 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white rounded-2xl shadow-lg flex items-center justify-center font-black text-base border border-amber-400" title="上架販售 (G)">
+                        <i class="fa-solid fa-store"></i>
+                    </button>
+                    <button onclick="triggerSabotage(1)" class="w-11 h-11 bg-purple-600 hover:bg-purple-500 active:scale-95 text-white rounded-2xl shadow-lg flex items-center justify-center font-black text-base border border-purple-400" title="派史萊姆襲擊 P2 (H)">
+                        <i class="fa-solid fa-skull"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- P2 VIEWPORT (RIGHT - BLUE PLAYER) -->
+        <div id="p2-viewport" class="player-viewport">
+            <!-- P2 HUD Overlay -->
+            <div class="absolute top-3 left-3 right-3 pointer-events-none flex justify-between items-start z-10">
+                <!-- P2 Shop & Hero Badge -->
+                <div class="bg-slate-900/90 border border-blue-500/60 backdrop-blur-md p-2.5 rounded-2xl shadow-xl pointer-events-auto min-w-[180px] pulse-glow-blue">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="text-xs font-black bg-blue-600 text-white px-2 py-0.5 rounded-md">P2 蔚藍工坊</span>
+                        <span class="text-[10px] text-amber-400 font-bold">Lv.<span id="p2-shop-lvl">1</span> 店鋪</span>
+                    </div>
+
+                    <!-- HP Bar -->
+                    <div class="text-[10px] text-slate-300 flex justify-between font-bold mb-0.5">
+                        <span>戰士體力 HP</span> <span id="p2-hp-text">100 / 100</span>
+                    </div>
+                    <div class="w-full bg-slate-950 rounded-full h-1.5 border border-slate-800 overflow-hidden mb-1.5">
+                        <div id="p2-hp-bar" class="bg-emerald-500 h-full smooth-bar" style="width: 100%"></div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-1 text-[10px] font-bold text-slate-300">
+                        <div><i class="fa-solid fa-boxes-stacked text-amber-400 me-1"></i>庫存: <span id="p2-stock" class="text-white">0</span></div>
+                        <div><i class="fa-solid fa-users text-indigo-400 me-1"></i>顧客: <span id="p2-cust" class="text-white">0</span></div>
+                    </div>
+                </div>
+
+                <!-- P2 Vault & Price Mode -->
+                <div class="flex flex-col gap-1 items-end pointer-events-auto">
+                    <div class="bg-blue-950/90 border border-blue-600/60 backdrop-blur-md px-3 py-1.5 rounded-2xl text-right shadow-xl">
+                        <div class="text-[9px] text-blue-300 font-extrabold uppercase">P2 金幣財富</div>
+                        <div class="text-amber-400 font-black text-base"><i class="fa-solid fa-coins me-1"></i>$<span id="p2-gold">150</span></div>
+                    </div>
+                    <button onclick="cyclePriceStrategy(2)" id="p2-price-btn" class="bg-slate-900/90 border border-slate-700 text-[10px] font-bold text-amber-300 px-2.5 py-1 rounded-xl">
+                        策略: 平價策略
+                    </button>
+                </div>
+            </div>
+
+            <!-- P2 Bottom Control Panel -->
+            <div class="absolute bottom-3 left-3 right-3 pointer-events-none flex justify-between items-end z-10">
+                <!-- Action / Craft Controls for P2 -->
+                <div class="bg-slate-950/90 border border-slate-800 p-2.5 rounded-2xl backdrop-blur-md pointer-events-auto flex flex-col gap-2 max-w-[280px]">
+                    <div class="text-[10px] text-slate-400 font-bold flex justify-between items-center">
+                        <span><i class="fa-solid fa-cubes text-cyan-400 me-1"></i>素材: 木<span id="p2-mat-wood">0</span> 水晶<span id="p2-mat-cys">0</span></span>
+                        <button onclick="openWorkshopModal(2)" class="bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] px-2 py-0.5 rounded-lg">
+                            <i class="fa-solid fa-hammer me-1"></i>工坊
+                        </button>
+                    </div>
+                    <!-- Controls Key Hint -->
+                    <div class="text-[9px] text-slate-400">
+                        <b>方向鍵</b> 移動 | <b>K</b> 採集/砍擊 | <b>L</b> 補貨 | <b>;</b> 騷擾對方
+                    </div>
+                </div>
+
+                <!-- P2 Action Buttons -->
+                <div class="flex gap-2 pointer-events-auto">
+                    <button onclick="triggerP2Attack()" class="w-11 h-11 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white rounded-2xl shadow-lg flex items-center justify-center font-black text-base border border-blue-400" title="攻擊/採集 (K)">
+                        <i class="fa-solid fa-hand-fist"></i>
+                    </button>
+                    <button onclick="triggerP2Stock()" class="w-11 h-11 bg-amber-600 hover:bg-amber-500 active:scale-95 text-white rounded-2xl shadow-lg flex items-center justify-center font-black text-base border border-amber-400" title="上架販售 (L)">
+                        <i class="fa-solid fa-store"></i>
+                    </button>
+                    <button onclick="triggerSabotage(2)" class="w-11 h-11 bg-purple-600 hover:bg-purple-500 active:scale-95 text-white rounded-2xl shadow-lg flex items-center justify-center font-black text-base border border-purple-400" title="派史萊姆襲擊 P1 (;)">
+                        <i class="fa-solid fa-skull"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- WORKSHOP & CRAFTING MODAL -->
+    <div id="workshop-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div id="workshop-card" class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-5 shadow-2xl space-y-4 relative">
+            <button onclick="closeWorkshopModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-200 text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="flex items-center gap-3">
+                <div id="workshop-icon" class="w-10 h-10 rounded-2xl bg-rose-600/20 text-rose-400 flex items-center justify-center text-xl">
+                    <i class="fa-solid fa-hammer"></i>
+                </div>
+                <div>
+                    <h3 id="workshop-title" class="text-base font-black text-white">P1 赤紅製造工坊</h3>
+                    <p class="text-[11px] text-slate-400">將野外採集的木材與水晶鍛造成高價商品</p>
+                </div>
+            </div>
+
+            <!-- Crafting Items Grid -->
+            <div class="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                <!-- Item 1: Wooden Shield -->
+                <div class="bg-slate-950 border border-slate-800 p-3 rounded-2xl flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-bold text-white">🪵 精製木質防具 (普通商品)</div>
+                        <div class="text-[10px] text-slate-400">需求: 木材 x2</div>
+                        <div class="text-[10px] text-amber-400 font-bold">基礎價值: $80</div>
+                    </div>
+                    <button onclick="craftProduct('WOOD_ARMOR')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-3 py-1.5 rounded-xl transition shadow">
+                        製造 +1
+                    </button>
+                </div>
+
+                <!-- Item 2: Crystal Sword -->
+                <div class="bg-slate-950 border border-slate-800 p-3 rounded-2xl flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-bold text-white">💎 水晶聖劍 (高階商品)</div>
+                        <div class="text-[10px] text-slate-400">需求: 木材 x1 + 水晶 x2</div>
+                        <div class="text-[10px] text-amber-400 font-bold">基礎價值: $220</div>
+                    </div>
+                    <button onclick="craftProduct('CRYSTAL_SWORD')" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-3 py-1.5 rounded-xl transition shadow">
+                        製造 +1
+                    </button>
+                </div>
+
+                <!-- Upgrade Shop Level -->
+                <div class="bg-indigo-950/60 border border-indigo-800/80 p-3 rounded-2xl flex items-center justify-between">
+                    <div>
+                        <div class="text-xs font-bold text-indigo-300">🏪 升級旗艦店鋪等級</div>
+                        <div class="text-[10px] text-slate-400">增加 25% 顧客滿意度與販售溢價</div>
+                    </div>
+                    <button onclick="upgradeShopLevel()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs px-3 py-1.5 rounded-xl transition shadow">
+                        升級 ($250)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- KINGDOM AUCTION / BIDDING MODAL -->
+    <div id="auction-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-amber-500/50 rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4 relative">
+            <button onclick="closeAuctionModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-200 text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="text-center space-y-1">
+                <span class="text-xs font-black bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full border border-amber-500/40">👑 王國皇家競標會</span>
+                <h3 class="text-lg font-black text-white">爭奪獨家王國特許經營權</h3>
+                <p class="text-xs text-slate-400">競標標的: <b class="text-amber-300" id="auction-item-name">中央廣場皇家噴泉廣告權</b></p>
+            </div>
+
+            <!-- Current Bid Status -->
+            <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex items-center justify-around text-center">
+                <div>
+                    <span class="text-[10px] text-slate-400 block font-bold">最高出價金額</span>
+                    <span id="auction-highest-bid" class="text-xl font-black text-amber-400">$200</span>
+                </div>
+                <div class="h-8 w-px bg-slate-800"></div>
+                <div>
+                    <span class="text-[10px] text-slate-400 block font-bold">目前領先買家</span>
+                    <span id="auction-leader-name" class="text-sm font-black text-slate-300">尚未有人競標</span>
+                </div>
+            </div>
+
+            <!-- Bid Actions Row -->
+            <div class="grid grid-cols-2 gap-3 pt-2">
+                <div class="bg-rose-950/50 border border-rose-800/80 p-3 rounded-2xl text-center space-y-2">
+                    <span class="text-xs font-black text-rose-300 block">P1 赤紅商會</span>
+                    <button onclick="placeBid(1, 50)" class="w-full bg-rose-600 hover:bg-rose-500 text-white text-xs font-black py-2 rounded-xl transition shadow active:scale-95">
+                        加價 +$50
+                    </button>
+                </div>
+                <div class="bg-blue-950/50 border border-blue-800/80 p-3 rounded-2xl text-center space-y-2">
+                    <span class="text-xs font-black text-blue-300 block">P2 蔚藍工坊</span>
+                    <button onclick="placeBid(2, 50)" class="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-black py-2 rounded-xl transition shadow active:scale-95">
+                        加價 +$50
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HELP MODAL -->
+    <div id="help-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-5 shadow-2xl space-y-4 relative">
+            <button onclick="toggleHelpModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-200 text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h3 class="text-base font-black text-white flex items-center gap-2">
+                <i class="fa-solid fa-trophy text-amber-400"></i> 雙人競技商業大亨指引
+            </h3>
+            <div class="text-xs text-slate-300 space-y-2 leading-relaxed">
+                <p>⚔️ <b class="text-rose-400">P1 (左側赤紅商會)</b>: 使用鍵盤 <b class="text-white">WASD</b> 移動，按 <b class="text-white">F</b> 採集/砍樹擊殺怪物，按 <b class="text-white">G</b> 上架，按 <b class="text-white">H</b> 派史萊姆襲擊 P2。</p>
+                <p>🛡️ <b class="text-blue-400">P2 (右側蔚藍工坊)</b>: 使用鍵盤 <b class="text-white">方向鍵</b> 移動，按 <b class="text-white">K</b> 採集/砍樹擊殺怪物，按 <b class="text-white">L</b> 上架，按 <b class="text-white">;</b> 派史萊姆襲擊 P1。</p>
+                <p>💰 <b class="text-amber-400">勝負規則</b>: 率先達到 <b class="text-white">$3,000 總資產</b> 者獲得王國商業霸權勝利！中央廣場合成、競標與爭奪顧客是贏得競爭的關鍵。</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- FOOTER TICKER -->
+    <footer class="h-[40px] bg-slate-950 border-t border-slate-800 px-4 flex items-center text-xs text-slate-400 shrink-0">
+        <span class="font-bold text-amber-400 flex items-center gap-1 me-2 shrink-0">
+            <i class="fa-solid fa-bullhorn text-rose-400"></i> 商會戰況快報:
+        </span>
+        <div id="ticker-log" class="truncate font-medium text-slate-300">
+            《雙人競技大亨 3D》競爭開始！率先累積 $3,000 資產者獲得王國大亨寶座！
+        </div>
+    </footer>
+
+    <script>
+        /* Audio Synthesizer */
+        class SoundFX {
+            constructor() { this.ctx = null; }
+            init() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+            play(freq, type = 'sine', duration = 0.1, gainVal = 0.1) {
+                try {
+                    this.init();
+                    if (this.ctx.state === 'suspended') this.ctx.resume();
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch(e) {}
+            }
+            hit() { this.play(280, 'sawtooth', 0.08, 0.12); }
+            coin() { this.play(880, 'sine', 0.08, 0.1); setTimeout(() => this.play(1174, 'sine', 0.15, 0.12), 50); }
+            craft() { this.play(523, 'triangle', 0.1, 0.08); setTimeout(() => this.play(659, 'triangle', 0.12, 0.08), 70); }
+            sabotage() { this.play(150, 'sawtooth', 0.25, 0.15); }
+            auction() { [523, 659, 783, 1046].forEach((f, i) => setTimeout(() => this.play(f, 'sine', 0.12, 0.08), i * 60)); }
+        }
+        const sfx = new SoundFX();
+
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const toast = document.createElement('div');
+            const bgClass = type === 'error' ? 'bg-rose-900/90 border-rose-500 text-rose-100' : 
+                            type === 'success' ? 'bg-emerald-900/90 border-emerald-500 text-emerald-100' : 
+                            'bg-slate-900/90 border-slate-600 text-slate-100';
+            toast.className = `px-4 py-2 rounded-2xl border backdrop-blur-md shadow-2xl text-xs font-bold transition-all duration-300 transform translate-y-[-10px] opacity-0 ${bgClass}`;
+            toast.innerHTML = msg;
+            container.appendChild(toast);
+            
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-[-10px]', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-[-10px]');
+                setTimeout(() => toast.remove(), 300);
+            }, 2500);
+        }
+
+        let gameState = {
+            day: 1,
+            hour: 9,
+            targetGoal: 3000,
+            
+            // Player 1 State
+            p1: {
+                x: -12, z: 5,
+                hp: 100, maxHp: 100,
+                gold: 150,
+                shopLevel: 1,
+                priceStrategy: 'BALANCED', // BUDGET, BALANCED, LUXURY
+                stockCount: 1,
+                customers: 0,
+                materials: { wood: 3, crystal: 1 }
+            },
+
+            // Player 2 State
+            p2: {
+                x: 12, z: 5,
+                hp: 100, maxHp: 100,
+                gold: 150,
+                shopLevel: 1,
+                priceStrategy: 'BALANCED',
+                stockCount: 1,
+                customers: 0,
+                materials: { wood: 3, crystal: 1 }
+            },
+
+            auction: {
+                active: false,
+                itemName: '皇家中央廣場合作金牌',
+                highestBid: 200,
+                leader: null
+            }
+        };
+
+        let scene, renderer;
+        let p1Camera, p2Camera;
+        let p1Mesh, p2Mesh;
+        let wildTrees = [];
+        let wildCrystals = [];
+        let wildSlimes = [];
+        let townNPCs = [];
+        let p1Input = {}, p2Input = {};
+        let activeWorkshopPlayer = 1;
+
+        function init3DWorld() {
+            const container = document.getElementById('viewport-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0f1d);
+            scene.fog = new THREE.FogExp2(0x0a0f1d, 0.018);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+            renderer.domElement.style.position = 'absolute';
+            renderer.domElement.style.top = '0';
+            renderer.domElement.style.left = '0';
+            container.appendChild(renderer.domElement);
+
+            const aspect = (container.clientWidth / 2) / container.clientHeight;
+            
+            p1Camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
+            p1Camera.position.set(-12, 14, 18);
+
+            p2Camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
+            p2Camera.position.set(12, 14, 18);
+
+            // Lighting
+            const ambient = new THREE.AmbientLight(0xffffff, 0.65);
+            scene.add(ambient);
+
+            const sun = new THREE.DirectionalLight(0xfff5ea, 0.85);
+            sun.position.set(0, 35, 15);
+            sun.castShadow = true;
+            sun.shadow.mapSize.width = 1024;
+            sun.shadow.mapSize.height = 1024;
+            scene.add(sun);
+
+            build3DEnvironment();
+            spawn3DPlayers();
+            spawnWildResources();
+            spawnTownNPCs();
+
+            // Keyboard listeners
+            window.addEventListener('keydown', e => { p1Input[e.key.toLowerCase()] = true; p2Input[e.key] = true; });
+            window.addEventListener('keyup', e => { p1Input[e.key.toLowerCase()] = false; p2Input[e.key] = false; });
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function build3DEnvironment() {
+            // Main Grass Ground
+            const groundGeo = new THREE.PlaneGeometry(70, 70);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x11281a, roughness: 0.9 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Central Town Market Avenue (Neutral Strip)
+            const streetGeo = new THREE.PlaneGeometry(8, 70);
+            const streetMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.7 });
+            const street = new THREE.Mesh(streetGeo, streetMat);
+            street.rotation.x = -Math.PI / 2;
+            street.position.set(0, 0.02, 0);
+            scene.add(street);
+
+            // P1 Shop (Left side - Red)
+            const p1Shop = new THREE.Group();
+            const p1Body = new THREE.Mesh(new THREE.BoxGeometry(6, 4, 6), new THREE.MeshStandardMaterial({ color: 0x9f1239 }));
+            const p1Roof = new THREE.Mesh(new THREE.ConeGeometry(5, 2.5, 4), new THREE.MeshStandardMaterial({ color: 0xf43f5e }));
+            p1Roof.position.y = 3.25;
+            p1Roof.rotation.y = Math.PI / 4;
+            p1Shop.add(p1Body);
+            p1Shop.add(p1Roof);
+            p1Shop.position.set(-14, 2, -10);
+            scene.add(p1Shop);
+
+            // P2 Shop (Right side - Blue)
+            const p2Shop = new THREE.Group();
+            const p2Body = new THREE.Mesh(new THREE.BoxGeometry(6, 4, 6), new THREE.MeshStandardMaterial({ color: 0x1e40af }));
+            const p2Roof = new THREE.Mesh(new THREE.ConeGeometry(5, 2.5, 4), new THREE.MeshStandardMaterial({ color: 0x3b82f6 }));
+            p2Roof.position.y = 3.25;
+            p2Roof.rotation.y = Math.PI / 4;
+            p2Shop.add(p2Body);
+            p2Shop.add(p2Roof);
+            p2Shop.position.set(14, 2, -10);
+            scene.add(p2Shop);
+
+            // Royal Central Auction Hall (Middle)
+            const hallGeo = new THREE.CylinderGeometry(3, 3, 3, 8);
+            const hallMat = new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.6 });
+            const hall = new THREE.Mesh(hallGeo, hallMat);
+            hall.position.set(0, 1.5, -12);
+            scene.add(hall);
+        }
+
+        function spawn3DPlayers() {
+            // P1 Red Champion
+            p1Mesh = new THREE.Group();
+            const body1 = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.2, 12), new THREE.MeshStandardMaterial({ color: 0xe11d48 }));
+            const head1 = new THREE.Mesh(new THREE.SphereGeometry(0.4, 12, 12), new THREE.MeshStandardMaterial({ color: 0xfed7aa }));
+            head1.position.y = 0.8;
+            p1Mesh.add(body1);
+            p1Mesh.add(head1);
+            p1Mesh.position.set(gameState.p1.x, 1, gameState.p1.z);
+            scene.add(p1Mesh);
+
+            // P2 Blue Champion
+            p2Mesh = new THREE.Group();
+            const body2 = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.2, 12), new THREE.MeshStandardMaterial({ color: 0x2563eb }));
+            const head2 = new THREE.Mesh(new THREE.SphereGeometry(0.4, 12, 12), new THREE.MeshStandardMaterial({ color: 0xfed7aa }));
+            head2.position.y = 0.8;
+            p2Mesh.add(body2);
+            p2Mesh.add(head2);
+            p2Mesh.position.set(gameState.p2.x, 1, gameState.p2.z);
+            scene.add(p2Mesh);
+        }
+
+        function spawnWildResources() {
+            // Shared Wild Wood Trees in neutral area
+            for (let i = 0; i < 6; i++) {
+                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 2), new THREE.MeshStandardMaterial({ color: 0x451a03 }));
+                const leaves = new THREE.Mesh(new THREE.ConeGeometry(1.6, 2.5, 5), new THREE.MeshStandardMaterial({ color: 0x16a34a }));
+                leaves.position.y = 1.8;
+                const tree = new THREE.Group();
+                tree.add(trunk); tree.add(leaves);
+                tree.position.set((Math.random() - 0.5) * 20, 1, 5 + Math.random() * 15);
+                scene.add(tree);
+                wildTrees.push(tree);
+            }
+
+            // Shared Wild Crystals
+            for (let i = 0; i < 4; i++) {
+                const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.8), new THREE.MeshStandardMaterial({ color: 0x06b6d4, metalness: 0.8, roughness: 0.2 }));
+                crystal.position.set((Math.random() - 0.5) * 22, 0.8, 10 + Math.random() * 15);
+                scene.add(crystal);
+                wildCrystals.push(crystal);
+            }
+
+            // Wild Slimes
+            for (let i = 0; i < 3; i++) {
+                const slime = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8), new THREE.MeshStandardMaterial({ color: 0xa855f7, transparent: true, opacity: 0.8 }));
+                slime.position.set((Math.random() - 0.5) * 24, 0.6, 12 + Math.random() * 12);
+                scene.add(slime);
+                wildSlimes.push(slime);
+            }
+        }
+
+        function spawnTownNPCs() {
+            // Customer NPCs along central avenue
+            for (let i = 0; i < 4; i++) {
+                const npc = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1.1, 10), new THREE.MeshStandardMaterial({ color: 0xf59e0b }));
+                npc.position.set((Math.random() - 0.5) * 4, 0.8, -25 + Math.random() * 40);
+                scene.add(npc);
+                townNPCs.push({ mesh: npc, dir: Math.random() > 0.5 ? 1 : -1, targetPlayer: null });
+            }
+        }
+
+        function updateGameLoop() {
+            const spd = 0.25;
+
+            // P1 WASD Movement
+            if (p1Input['w']) gameState.p1.z -= spd;
+            if (p1Input['s']) gameState.p1.z += spd;
+            if (p1Input['a']) gameState.p1.x -= spd;
+            if (p1Input['d']) gameState.p1.x += spd;
+
+            // Bounds P1
+            gameState.p1.x = Math.max(-28, Math.min(28, gameState.p1.x));
+            gameState.p1.z = Math.max(-28, Math.min(28, gameState.p1.z));
+            p1Mesh.position.set(gameState.p1.x, 1, gameState.p1.z);
+            p1Camera.position.set(gameState.p1.x, 14, gameState.p1.z + 18);
+            p1Camera.lookAt(gameState.p1.x, 1, gameState.p1.z);
+
+            // P2 Arrow Movement
+            if (p2Input['ArrowUp']) gameState.p2.z -= spd;
+            if (p2Input['ArrowDown']) gameState.p2.z += spd;
+            if (p2Input['ArrowLeft']) gameState.p2.x -= spd;
+            if (p2Input['ArrowRight']) gameState.p2.x += spd;
+
+            // Bounds P2
+            gameState.p2.x = Math.max(-28, Math.min(28, gameState.p2.x));
+            gameState.p2.z = Math.max(-28, Math.min(28, gameState.p2.z));
+            p2Mesh.position.set(gameState.p2.x, 1, gameState.p2.z);
+            p2Camera.position.set(gameState.p2.x, 14, gameState.p2.z + 18);
+            p2Camera.lookAt(gameState.p2.x, 1, gameState.p2.z);
+
+            // Action Trigger Keys
+            if (p1Input['f']) { triggerP1Attack(); p1Input['f'] = false; }
+            if (p1Input['g']) { triggerP1Stock(); p1Input['g'] = false; }
+            if (p1Input['h']) { triggerSabotage(1); p1Input['h'] = false; }
+
+            if (p2Input['k']) { triggerP2Attack(); p2Input['k'] = false; }
+            if (p2Input['l']) { triggerP2Stock(); p2Input['l'] = false; }
+            if (p2Input[';']) { triggerSabotage(2); p2Input[';'] = false; }
+
+            // Animate Crystals & NPCs
+            wildCrystals.forEach(c => { c.rotation.y += 0.02; });
+            townNPCs.forEach(npc => {
+                npc.mesh.position.z += 0.05 * npc.dir;
+                if (npc.mesh.position.z > 25 || npc.mesh.position.z < -25) npc.dir *= -1;
+            });
+
+            // Check Win Condition
+            checkWinCondition();
+        }
+
+        function triggerP1Attack() {
+            sfx.hit();
+            harvestNearResource(1);
+        }
+
+        function triggerP2Attack() {
+            sfx.hit();
+            harvestNearResource(2);
+        }
+
+        function harvestNearResource(pNum) {
+            const playerPos = pNum === 1 ? p1Mesh.position : p2Mesh.position;
+            const pData = pNum === 1 ? gameState.p1 : gameState.p2;
+
+            // Check Tree Harvest
+            for (let i = wildTrees.length - 1; i >= 0; i--) {
+                const t = wildTrees[i];
+                if (playerPos.distanceTo(t.position) < 3.5) {
+                    sfx.craft();
+                    pData.materials.wood += 2;
+                    showToast(`P${pNum} 採集到 木材 +2！`, 'success');
+                    scene.remove(t);
+                    wildTrees.splice(i, 1);
+                    setTimeout(spawnWildResources, 6000);
+                    renderHUD();
+                    return;
+                }
+            }
+
+            // Check Crystal Harvest
+            for (let i = wildCrystals.length - 1; i >= 0; i--) {
+                const c = wildCrystals[i];
+                if (playerPos.distanceTo(c.position) < 3.5) {
+                    sfx.craft();
+                    pData.materials.crystal += 1;
+                    showToast(`P${pNum} 採集到 水晶 +1！`, 'success');
+                    scene.remove(c);
+                    wildCrystals.splice(i, 1);
+                    setTimeout(spawnWildResources, 8000);
+                    renderHUD();
+                    return;
+                }
+            }
+        }
+
+        function triggerP1Stock() {
+            if (gameState.p1.stockCount > 0) {
+                gameState.p1.stockCount--;
+                const basePrice = gameState.p1.priceStrategy === 'LUXURY' ? 160 : gameState.p1.priceStrategy === 'BUDGET' ? 70 : 110;
+                const totalGold = basePrice * gameState.p1.shopLevel;
+                gameState.p1.gold += totalGold;
+                sfx.coin();
+                updateTicker(`💰 P1 赤紅商會成功售出商品！獲得金幣 +$${totalGold}`);
+                renderHUD();
+            } else {
+                showToast('⚠️ P1 庫存不足！請前往工坊製造商品。', 'error');
+            }
+        }
+
+        function triggerP2Stock() {
+            if (gameState.p2.stockCount > 0) {
+                gameState.p2.stockCount--;
+                const basePrice = gameState.p2.priceStrategy === 'LUXURY' ? 160 : gameState.p2.priceStrategy === 'BUDGET' ? 70 : 110;
+                const totalGold = basePrice * gameState.p2.shopLevel;
+                gameState.p2.gold += totalGold;
+                sfx.coin();
+                updateTicker(`💰 P2 蔚藍工坊成功售出商品！獲得金幣 +$${totalGold}`);
+                renderHUD();
+            } else {
+                showToast('⚠️ P2 庫存不足！請前往工坊製造商品。', 'error');
+            }
+        }
+
+        function triggerSabotage(pNum) {
+            const attacker = pNum === 1 ? gameState.p1 : gameState.p2;
+            const defenderNum = pNum === 1 ? 2 : 1;
+            const defender = pNum === 1 ? gameState.p2 : gameState.p1;
+
+            if (attacker.gold >= 80) {
+                attacker.gold -= 80;
+                sfx.sabotage();
+                
+                // Steal customer or disrupt stock
+                if (defender.stockCount > 0) {
+                    defender.stockCount--;
+                    showToast(`⚡ P${pNum} 派遣史萊姆襲擊 P${defenderNum}，摧毀了對方 1 份庫存！`, 'success');
+                    updateTicker(`💥 P${pNum} 展開商業襲擊！P${defenderNum} 的商品遭到騷擾破壞！`);
+                } else {
+                    defender.gold = Math.max(0, defender.gold - 50);
+                    showToast(`⚡ P${pNum} 派遣騷擾團隊，削弱 P${defenderNum} 金幣 -$50！`, 'success');
+                }
+                renderHUD();
+            } else {
+                showToast('⚠️ 騷擾襲擊需要 $80 金幣！', 'error');
+            }
+        }
+
+        function cyclePriceStrategy(pNum) {
+            const pData = pNum === 1 ? gameState.p1 : gameState.p2;
+            const btn = document.getElementById(`p${pNum}-price-btn`);
+
+            if (pData.priceStrategy === 'BALANCED') {
+                pData.priceStrategy = 'LUXURY';
+                btn.innerText = '策略: 高價奢華';
+            } else if (pData.priceStrategy === 'LUXURY') {
+                pData.priceStrategy = 'BUDGET';
+                btn.innerText = '策略: 平價促銷';
+            } else {
+                pData.priceStrategy = 'BALANCED';
+                btn.innerText = '策略: 平價策略';
+            }
+            sfx.craft();
+            renderHUD();
+        }
+
+        function openWorkshopModal(pNum) {
+            activeWorkshopPlayer = pNum;
+            const modal = document.getElementById('workshop-modal');
+            const title = document.getElementById('workshop-title');
+            const icon = document.getElementById('workshop-icon');
+
+            if (pNum === 1) {
+                title.innerText = 'P1 赤紅製造工坊';
+                icon.className = 'w-10 h-10 rounded-2xl bg-rose-600/20 text-rose-400 flex items-center justify-center text-xl';
+            } else {
+                title.innerText = 'P2 蔚藍製造工坊';
+                icon.className = 'w-10 h-10 rounded-2xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-xl';
+            }
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeWorkshopModal() {
+            document.getElementById('workshop-modal').classList.add('hidden');
+        }
+
+        function craftProduct(itemType) {
+            const pData = activeWorkshopPlayer === 1 ? gameState.p1 : gameState.p2;
+
+            if (itemType === 'WOOD_ARMOR') {
+                if (pData.materials.wood >= 2) {
+                    pData.materials.wood -= 2;
+                    pData.stockCount += 1;
+                    sfx.craft();
+                    showToast('🪵 成功製造木質防具商品！', 'success');
+                } else showToast('⚠️ 木材數量不足！需求 2 個。', 'error');
+            } else if (itemType === 'CRYSTAL_SWORD') {
+                if (pData.materials.wood >= 1 && pData.materials.crystal >= 2) {
+                    pData.materials.wood -= 1;
+                    pData.materials.crystal -= 2;
+                    pData.stockCount += 1;
+                    sfx.craft();
+                    showToast('💎 成功製造水晶聖劍高階商品！', 'success');
+                } else showToast('⚠️ 素材不足！需要 1 木材與 2 水晶。', 'error');
+            }
+            renderHUD();
+        }
+
+        function upgradeShopLevel() {
+            const pData = activeWorkshopPlayer === 1 ? gameState.p1 : gameState.p2;
+            if (pData.gold >= 250) {
+                pData.gold -= 250;
+                pData.shopLevel++;
+                sfx.auction();
+                showToast(`🎉 成功將店鋪升級至 Lv.${pData.shopLevel}！`, 'success');
+                renderHUD();
+            } else showToast('⚠️ 升級資金不足！需求 $250 金幣。', 'error');
+        }
+
+        function triggerAuctionModal() {
+            gameState.auction.active = true;
+            gameState.auction.highestBid = 200;
+            gameState.auction.leader = null;
+            document.getElementById('auction-highest-bid').innerText = '$200';
+            document.getElementById('auction-leader-name').innerText = '尚未有人競標';
+            document.getElementById('auction-modal').classList.remove('hidden');
+            sfx.auction();
+        }
+
+        function closeAuctionModal() {
+            document.getElementById('auction-modal').classList.add('hidden');
+        }
+
+        function placeBid(pNum, amt) {
+            const pData = pNum === 1 ? gameState.p1 : gameState.p2;
+            const newBid = gameState.auction.highestBid + amt;
+
+            if (pData.gold >= newBid) {
+                pData.gold -= newBid;
+                if (gameState.auction.leader) {
+                    // Refund previous leader
+                    const prevLeader = gameState.auction.leader === 1 ? gameState.p1 : gameState.p2;
+                    prevLeader.gold += gameState.auction.highestBid;
+                }
+                gameState.auction.highestBid = newBid;
+                gameState.auction.leader = pNum;
+                sfx.coin();
+
+                document.getElementById('auction-highest-bid').innerText = `$${newBid}`;
+                document.getElementById('auction-leader-name').innerText = `P${pNum} 商會領先`;
+                showToast(`P${pNum} 出價 $${newBid}！`, 'success');
+                renderHUD();
+            } else {
+                showToast('⚠️ 出價金幣不足！', 'error');
+            }
+        }
+
+        function checkWinCondition() {
+            if (gameState.p1.gold >= gameState.targetGoal) {
+                sfx.auction();
+                showToast('👑 P1 赤紅商會率先達到 $3,000 資產！獲得大亨霸權勝利！', 'success');
+            } else if (gameState.p2.gold >= gameState.targetGoal) {
+                sfx.auction();
+                showToast('👑 P2 蔚藍工坊率先達到 $3,000 資產！獲得大亨霸權勝利！', 'success');
+            }
+        }
+
+        function renderHUD() {
+            // P1 HUD
+            document.getElementById('p1-gold').innerText = gameState.p1.gold;
+            document.getElementById('p1-worth-top').innerText = `$${gameState.p1.gold}`;
+            document.getElementById('p1-stock').innerText = gameState.p1.stockCount;
+            document.getElementById('p1-shop-lvl').innerText = gameState.p1.shopLevel;
+            document.getElementById('p1-mat-wood').innerText = gameState.p1.materials.wood;
+            document.getElementById('p1-mat-cys').innerText = gameState.p1.materials.crystal;
+
+            // P2 HUD
+            document.getElementById('p2-gold').innerText = gameState.p2.gold;
+            document.getElementById('p2-worth-top').innerText = `$${gameState.p2.gold}`;
+            document.getElementById('p2-stock').innerText = gameState.p2.stockCount;
+            document.getElementById('p2-shop-lvl').innerText = gameState.p2.shopLevel;
+            document.getElementById('p2-mat-wood').innerText = gameState.p2.materials.wood;
+            document.getElementById('p2-mat-cys').innerText = gameState.p2.materials.crystal;
+        }
+
+        function updateTicker(msg) {
+            document.getElementById('ticker-log').innerText = msg;
+        }
+
+        function toggleHelpModal() {
+            document.getElementById('help-modal').classList.toggle('hidden');
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('viewport-container');
+            const w = container.clientWidth / 2;
+            const h = container.clientHeight;
+
+            p1Camera.aspect = w / h;
+            p1Camera.updateProjectionMatrix();
+
+            p2Camera.aspect = w / h;
+            p2Camera.updateProjectionMatrix();
+
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        // Time Cycle
+        setInterval(() => {
+            gameState.hour++;
+            if (gameState.hour >= 24) {
+                gameState.hour = 0;
+                gameState.day++;
+            }
+            const period = gameState.hour >= 12 ? 'PM' : 'AM';
+            const displayHour = (gameState.hour % 12 || 12).toString().padStart(2, '0');
+            document.getElementById('day-text').innerText = `第 ${gameState.day} 天`;
+            document.getElementById('time-text').innerHTML = `<i class="fa-regular fa-clock me-1"></i>${displayHour}:00 ${period}`;
+        }, 5000);
+
+        // Split View Loop
+        function animate3D() {
+            requestAnimationFrame(animate3D);
+
+            updateGameLoop();
+
+            const container = document.getElementById('viewport-container');
+            const w = container.clientWidth / 2;
+            const h = container.clientHeight;
+
+            // Left Split (P1)
+            renderer.setViewport(0, 0, w, h);
+            renderer.setScissor(0, 0, w, h);
+            renderer.setScissorTest(true);
+            renderer.render(scene, p1Camera);
+
+            // Right Split (P2)
+            renderer.setViewport(w, 0, w, h);
+            renderer.setScissor(w, 0, w, h);
+            renderer.setScissorTest(true);
+            renderer.render(scene, p2Camera);
+        }
+
+        window.onload = function() {
+            function startEngine() {
+                if (typeof THREE !== 'undefined') {
+                    init3DWorld();
+                    renderHUD();
+                    animate3D();
+                } else {
+                    setTimeout(startEngine, 100);
+                }
+            }
+            startEngine();
+        };
+    </script>
+</body>
+</html>
