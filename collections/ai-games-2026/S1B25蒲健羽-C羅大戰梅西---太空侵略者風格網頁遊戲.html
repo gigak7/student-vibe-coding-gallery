@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C羅大戰梅西 - 太空侵略者風格網頁遊戲</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Noto+Sans+TC:wght@700;900&display=swap');
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        .font-pixel {
+            font-family: 'Press Start 2P', monospace;
+        }
+
+        .siuuu-title {
+            animation: siuuu-bounce 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) infinite alternate;
+            text-shadow: 0 0 20px #ef4444, 0 0 40px #f59e0b, 3px 3px 0 #000;
+        }
+
+        @keyframes siuuu-bounce {
+            0% { transform: scale(1) rotate(-2deg); }
+            100% { transform: scale(1.1) rotate(2deg); }
+        }
+
+        canvas {
+            display: block;
+            border-radius: 1rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        .custom-glass {
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .btn-arcade {
+            transition: all 0.1s ease;
+            box-shadow: 0 6px 0 #991b1b;
+        }
+
+        .btn-arcade:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 #991b1b;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-white min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 overflow-hidden">
+
+    <!-- Game Container Wrapper -->
+    <div class="relative w-full max-w-4xl flex flex-col items-center">
+        
+        <!-- Header & Top Bar HUD -->
+        <div class="w-full flex items-center justify-between mb-3 px-4 py-2.5 custom-glass rounded-2xl shadow-xl">
+            <!-- Player Side -->
+            <div class="flex items-center space-x-2 sm:space-x-3">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-red-600 to-amber-500 p-0.5 shadow-lg flex items-center justify-center font-bold text-lg">
+                    <span>🇵🇹</span>
+                </div>
+                <div>
+                    <div class="flex items-center space-x-1.5">
+                        <span class="font-black text-sm sm:text-base text-red-400">C羅 (CR7)</span>
+                        <span class="bg-red-950 text-red-400 text-[10px] px-1.5 py-0.5 rounded border border-red-800">底部射手</span>
+                    </div>
+                    <div class="text-[11px] text-slate-400">一擊即死 / 閃避模式</div>
+                </div>
+            </div>
+
+            <!-- Title / Game Mode -->
+            <div class="hidden md:flex flex-col items-center justify-center">
+                <span class="font-pixel text-xs text-amber-400 tracking-wider">SPACE INVADERS</span>
+                <span class="text-[10px] text-slate-400 uppercase tracking-widest mt-0.5">經典太空侵略者玩法</span>
+            </div>
+
+            <!-- Target Hit Counter Tracker -->
+            <div class="flex items-center space-x-3">
+                <div class="text-right">
+                    <div class="text-xs text-sky-400 font-bold">敵方：梅西陣容</div>
+                    <div class="flex items-center justify-end space-x-1 mt-0.5">
+                        <span class="text-xs text-slate-300">擊中目標:</span>
+                        <span id="hit-count-text" class="text-amber-400 font-black text-sm sm:text-base font-pixel ml-1">0 / 10</span>
+                    </div>
+                </div>
+                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-500 to-blue-700 p-0.5 shadow-lg flex items-center justify-center font-bold text-lg">
+                    <span>🇦🇷</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Canvas Game Pitch Screen -->
+        <div class="relative w-full aspect-[4/3] sm:aspect-[16/10] max-h-[68vh] flex justify-center items-center overflow-hidden rounded-2xl bg-emerald-950 border-2 border-emerald-600/40 shadow-2xl">
+            
+            <canvas id="gameCanvas" class="w-full h-full object-contain"></canvas>
+
+            <!-- START OVERLAY SCREEN -->
+            <div id="start-screen" class="absolute inset-0 custom-glass flex flex-col items-center justify-center p-6 text-center z-20">
+                <div class="inline-block bg-red-600/20 border border-red-500/40 text-red-400 px-3 py-1 rounded-full text-xs font-bold mb-3 tracking-widest animate-pulse">
+                    ⚽ 侵略者版 FOOTBALL ARCADE
+                </div>
+                <h1 class="text-3xl sm:text-5xl font-black tracking-tight mb-2 text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-amber-300 to-sky-400">
+                    C羅大戰梅西
+                </h1>
+                <p class="text-slate-300 text-xs sm:text-sm max-w-md mb-5 leading-relaxed">
+                    梅西軍團正從上方進攻！控制 C羅 左右移動並發射重炮足球！<br>
+                    <span class="text-amber-400 font-bold">擊中 10 次梅西即可獲得最終勝利！</span><br>
+                    <span class="text-red-400 text-xs">注意：被梅西射中一次或被壓到底部即算失敗！</span>
+                </p>
+
+                <!-- Key Controls Table -->
+                <div class="grid grid-cols-2 gap-3 mb-6 w-full max-w-xs text-xs">
+                    <div class="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700 flex flex-col items-center">
+                        <span class="text-slate-400 mb-1">左右移動</span>
+                        <div class="font-mono text-amber-300 font-bold bg-slate-900 px-2 py-0.5 rounded">A / D 或 🠔 🠖</div>
+                    </div>
+                    <div class="bg-slate-800/80 p-2.5 rounded-xl border border-slate-700 flex flex-col items-center">
+                        <span class="text-slate-400 mb-1">重炮發射</span>
+                        <div class="font-mono text-amber-300 font-bold bg-slate-900 px-2 py-0.5 rounded">空白鍵 / 按鈕</div>
+                    </div>
+                </div>
+
+                <button id="start-btn" class="px-8 py-3 bg-gradient-to-r from-red-600 to-amber-500 rounded-xl font-black text-lg text-white shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer">
+                    開始對決 <i class="fa-solid fa-play text-xs ml-1"></i>
+                </button>
+            </div>
+
+            <!-- VICTORY OVERLAY SCREEN -->
+            <div id="victory-screen" class="hidden absolute inset-0 custom-glass flex-col items-center justify-center p-6 text-center z-20">
+                <div class="text-5xl sm:text-7xl font-black italic text-amber-400 siuuu-title mb-2 tracking-wider">
+                    SIUUUUU!
+                </div>
+                <div class="text-xl sm:text-3xl font-black text-white mb-2">
+                    👑 C羅 成功擊退梅西軍團！
+                </div>
+                <p class="text-slate-300 text-xs sm:text-sm mb-6">
+                    成功擊中梅西 <span class="text-amber-400 font-bold">10 次</span>，完美衛冕金球球王！
+                </p>
+                <button id="restart-win-btn" class="px-8 py-3 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-xl font-black text-lg text-white shadow-xl hover:scale-105 active:scale-95 transition-all cursor-pointer">
+                    再贏一次 <i class="fa-solid fa-rotate-right ml-1"></i>
+                </button>
+            </div>
+
+            <!-- GAME OVER OVERLAY SCREEN -->
+            <div id="lose-screen" class="hidden absolute inset-0 custom-glass flex-col items-center justify-center p-6 text-center z-20">
+                <div class="text-4xl sm:text-6xl font-black text-red-500 mb-2 tracking-wider font-pixel">
+                    GAME OVER
+                </div>
+                <div class="text-lg sm:text-xl font-bold text-slate-200 mb-2" id="lose-reason-text">
+                    挑戰失敗！
+                </div>
+                <p class="text-slate-400 text-xs sm:text-sm mb-6" id="final-hit-summary">
+                    你成功擊中了梅西 0 次
+                </p>
+                <button id="restart-lose-btn" class="px-8 py-3 bg-gradient-to-r from-red-600 to-rose-700 rounded-xl font-black text-lg text-white shadow-xl hover:scale-105 active:scale-95 transition-all cursor-pointer">
+                    重新挑戰 <i class="fa-solid fa-rotate-right ml-1"></i>
+                </button>
+            </div>
+
+            <!-- Audio Toggle Button -->
+            <button id="audio-toggle" class="absolute top-3 right-3 z-30 w-9 h-9 bg-slate-900/80 hover:bg-slate-800 text-slate-300 rounded-full flex items-center justify-center border border-slate-700 transition">
+                <i class="fa-solid fa-volume-high" id="audio-icon"></i>
+            </button>
+        </div>
+
+        <!-- Mobile Touch Controls Bar -->
+        <div class="w-full flex items-center justify-between mt-3 px-2 gap-2">
+            <div class="flex items-center space-x-2">
+                <button id="btn-left" class="w-14 h-12 bg-slate-800 active:bg-slate-700 text-white rounded-xl border border-slate-700 font-bold text-xl flex items-center justify-center shadow-lg active:scale-95">
+                    <i class="fa-solid fa-arrow-left"></i>
+                </button>
+                <button id="btn-right" class="w-14 h-12 bg-slate-800 active:bg-slate-700 text-white rounded-xl border border-slate-700 font-bold text-xl flex items-center justify-center shadow-lg active:scale-95">
+                    <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </div>
+            <button id="btn-shoot" class="flex-1 max-w-xs h-12 bg-gradient-to-r from-red-600 to-amber-500 active:from-red-700 active:to-amber-600 text-white font-black rounded-xl border border-red-500/50 shadow-lg flex items-center justify-center space-x-2 text-base active:scale-95">
+                <i class="fa-solid fa-futbol"></i>
+                <span>重炮發射</span>
+            </button>
+        </div>
+
+        <!-- Footer -->
+        <div class="w-full flex justify-between items-center mt-2 text-[11px] text-slate-500 px-2">
+            <span>C羅大戰梅西 (Space Invaders Edition)</span>
+            <span>鍵盤: A / D 左右移動, 空白鍵射門</span>
+        </div>
+    </div>
+
+    <script>
+        // Web Audio API Sound Generator
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) {
+                        this.ctx = new AudioContext();
+                    }
+                }
+            }
+
+            playKick() {
+                if (this.muted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 0.1);
+                
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+                
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.1);
+            }
+
+            playHit() {
+                if (this.muted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.15);
+                
+                gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+
+            playWin() {
+                if (this.muted || !this.ctx) return;
+                // SIUUU fanfare melody
+                const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime + i * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + i * 0.08 + 0.25);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + i * 0.08);
+                    osc.stop(this.ctx.currentTime + i * 0.08 + 0.25);
+                });
+            }
+
+            playLose() {
+                if (this.muted || !this.ctx) return;
+                const notes = [280, 220, 160, 110];
+                notes.forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.25, this.ctx.currentTime + i * 0.12);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + i * 0.12 + 0.2);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + i * 0.12);
+                    osc.stop(this.ctx.currentTime + i * 0.12 + 0.2);
+                });
+            }
+        }
+
+        const sound = new SoundFX();
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const CANVAS_WIDTH = 800;
+        const CANVAS_HEIGHT = 600;
+        canvas.width = CANVAS_WIDTH;
+        canvas.height = CANVAS_HEIGHT;
+
+        const STATE = { START: 'START', PLAYING: 'PLAYING', WIN: 'WIN', LOSE: 'LOSE' };
+        let currentState = STATE.START;
+
+        let totalHits = 0;
+        const TARGET_HITS = 10;
+        let screenShake = 0;
+
+        // Key Input Listeners
+        const keys = { Left: false, Right: false, Space: false };
+
+        class PlayerRonaldo {
+            constructor() {
+                this.width = 44;
+                this.height = 44;
+                this.x = CANVAS_WIDTH / 2 - this.width / 2;
+                this.y = CANVAS_HEIGHT - 60;
+                this.speed = 7;
+                this.cooldown = 0;
+            }
+
+            update() {
+                if (keys.Left) this.x -= this.speed;
+                if (keys.Right) this.x += this.speed;
+
+                // Boundary bounds
+                this.x = Math.max(10, Math.min(CANVAS_WIDTH - this.width - 10, this.x));
+
+                if (this.cooldown > 0) this.cooldown--;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+
+                // Glow Aura
+                ctx.beginPath();
+                ctx.arc(0, 0, 24, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
+                ctx.fill();
+
+                // Player Character Body (CR7 Red/Gold Jersey)
+                ctx.beginPath();
+                ctx.arc(0, 0, 20, 0, Math.PI * 2);
+                ctx.fillStyle = '#dc2626'; // Red
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = '#f59e0b'; // Gold
+                ctx.stroke();
+
+                // Jersey Text Label
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '900 13px "Noto Sans TC", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('CR7', 0, 1);
+
+                ctx.restore();
+            }
+        }
+
+        class InvaderMessi {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 18;
+                this.alive = true;
+            }
+
+            draw() {
+                if (!this.alive) return;
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                // Outer Skyblue Aura
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius + 3, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(14, 165, 233, 0.25)';
+                ctx.fill();
+
+                // Messi Body (Sky Blue Argentina)
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = '#0284c7';
+                ctx.fill();
+                ctx.lineWidth = 2.5;
+                ctx.strokeStyle = '#ffffff';
+                ctx.stroke();
+
+                // Number Label
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '900 12px "Noto Sans TC", sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('M10', 0, 1);
+
+                ctx.restore();
+            }
+        }
+
+        class Bullet {
+            constructor(x, y, vy, color, isPlayer) {
+                this.x = x;
+                this.y = y;
+                this.vy = vy;
+                this.radius = isPlayer ? 8 : 7;
+                this.color = color;
+                this.isPlayer = isPlayer;
+                this.rotation = 0;
+            }
+
+            update() {
+                this.y += this.vy;
+                this.rotation += 0.25;
+
+                // Motion Tail Particle Effect
+                if (Math.random() < 0.5) {
+                    particles.push(new Particle(this.x, this.y, this.color, 3));
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(this.rotation);
+
+                ctx.beginPath();
+                ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.lineWidth = 1.5;
+                ctx.strokeStyle = '#ffffff';
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color, size = 5) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.radius = Math.random() * size + 1.5;
+                this.vx = (Math.random() - 0.5) * 5;
+                this.vy = (Math.random() - 0.5) * 5;
+                this.alpha = 1;
+                this.decay = Math.random() * 0.04 + 0.02;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.alpha -= this.decay;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        let ronaldo = new PlayerRonaldo();
+        let messiGrid = [];
+        let bullets = [];
+        let particles = [];
+
+        // Invaders Motion State
+        let invaderDirection = 1; // 1 = right, -1 = left
+        let invaderSpeed = 1.2;
+        let invaderDropDistance = 16;
+        let enemyShootTimer = 0;
+
+        function initInvadersGrid() {
+            messiGrid = [];
+            const rows = 3;
+            const cols = 6;
+            const startX = 120;
+            const startY = 70;
+            const spacingX = 90;
+            const spacingY = 50;
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    messiGrid.push(new InvaderMessi(startX + c * spacingX, startY + r * spacingY));
+                }
+            }
+        }
+
+        function shootPlayerBullet() {
+            if (currentState !== STATE.PLAYING || ronaldo.cooldown > 0) return;
+            bullets.push(new Bullet(ronaldo.x + ronaldo.width / 2, ronaldo.y, -11, '#f59e0b', true));
+            ronaldo.cooldown = 12; // Cooldown frames
+            sound.playKick();
+        }
+
+        function updateInvaders() {
+            let hitEdge = false;
+            let activeInvaders = messiGrid.filter(m => m.alive);
+
+            // Move side-to-side
+            activeInvaders.forEach(invader => {
+                invader.x += invaderSpeed * invaderDirection;
+                if (invader.x > CANVAS_WIDTH - 30 || invader.x < 30) {
+                    hitEdge = true;
+                }
+
+                // Defeat Check: Invader reached Ronaldo's baseline
+                if (invader.y + invader.radius >= ronaldo.y) {
+                    triggerGameOver("梅西陣容已推進入侵防線！");
+                }
+            });
+
+            // Shift down when edge is hit
+            if (hitEdge) {
+                invaderDirection *= -1;
+                activeInvaders.forEach(invader => {
+                    invader.y += invaderDropDistance;
+                });
+            }
+
+            // Invaders Enemy Firing Logic
+            enemyShootTimer++;
+            if (enemyShootTimer > 35 && activeInvaders.length > 0) {
+                enemyShootTimer = 0;
+                // Pick random active Messi invader to shoot
+                const shooter = activeInvaders[Math.floor(Math.random() * activeInvaders.length)];
+                bullets.push(new Bullet(shooter.x, shooter.y + shooter.radius, 6, '#38bdf8', false));
+            }
+        }
+
+        function checkCollisions() {
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+
+                // Player Bullet Hits Messi Invader
+                if (b.isPlayer) {
+                    for (let j = 0; j < messiGrid.length; j++) {
+                        const m = messiGrid[j];
+                        if (m.alive) {
+                            const dist = Math.hypot(b.x - m.x, b.y - m.y);
+                            if (dist < b.radius + m.radius) {
+                                m.alive = false;
+                                bullets.splice(i, 1);
+                                totalHits++;
+                                screenShake = 8;
+                                sound.playHit();
+
+                                // Explosion FX
+                                for (let k = 0; k < 12; k++) {
+                                    particles.push(new Particle(m.x, m.y, '#38bdf8', 6));
+                                }
+
+                                document.getElementById('hit-count-text').innerText = `${totalHits} / ${TARGET_HITS}`;
+
+                                // Check Victory Condition
+                                if (totalHits >= TARGET_HITS) {
+                                    triggerVictory();
+                                } else if (messiGrid.filter(inv => inv.alive).length === 0) {
+                                    // Respawn grid wave if cleared before 10 hits
+                                    initInvadersGrid();
+                                    invaderSpeed += 0.4;
+                                }
+                                break;
+                            }
+                        }
+                    }
+                } 
+                // Enemy Messi Bullet Hits Ronaldo
+                else {
+                    const playerCenterX = ronaldo.x + ronaldo.width / 2;
+                    const playerCenterY = ronaldo.y + ronaldo.height / 2;
+                    const dist = Math.hypot(b.x - playerCenterX, b.y - playerCenterY);
+
+                    if (dist < b.radius + ronaldo.width / 2) {
+                        for (let k = 0; k < 20; k++) {
+                            particles.push(new Particle(playerCenterX, playerCenterY, '#ef4444', 7));
+                        }
+                        triggerGameOver("被梅西的黃金弧線球擊中了！");
+                        break;
+                    }
+                }
+
+                // Remove Out of Bounds Bullets
+                if (b && (b.y < -20 || b.y > CANVAS_HEIGHT + 20)) {
+                    bullets.splice(i, 1);
+                }
+            }
+        }
+
+        function triggerVictory() {
+            currentState = STATE.WIN;
+            sound.playWin();
+            document.getElementById('victory-screen').classList.remove('hidden');
+            document.getElementById('victory-screen').classList.add('flex');
+        }
+
+        function triggerGameOver(reasonText) {
+            currentState = STATE.LOSE;
+            sound.playLose();
+            document.getElementById('lose-reason-text').innerText = reasonText;
+            document.getElementById('final-hit-summary').innerText = `你成功擊中了梅西 ${totalHits} 次`;
+            document.getElementById('lose-screen').classList.remove('hidden');
+            document.getElementById('lose-screen').classList.add('flex');
+        }
+
+        function resetGame() {
+            totalHits = 0;
+            invaderSpeed = 1.2;
+            invaderDirection = 1;
+            bullets = [];
+            particles = [];
+            ronaldo = new PlayerRonaldo();
+            initInvadersGrid();
+
+            document.getElementById('hit-count-text').innerText = `0 / ${TARGET_HITS}`;
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('victory-screen').classList.add('hidden');
+            document.getElementById('victory-screen').classList.remove('flex');
+            document.getElementById('lose-screen').classList.add('hidden');
+            document.getElementById('lose-screen').classList.remove('flex');
+
+            currentState = STATE.PLAYING;
+        }
+
+        function drawSoccerPitch() {
+            // Field Base Gradient
+            const grad = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+            grad.addColorStop(0, '#064e3b');
+            grad.addColorStop(1, '#022c22');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Pitch Grid Stripes
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+            const stripeHeight = CANVAS_HEIGHT / 8;
+            for (let i = 0; i < 8; i += 2) {
+                ctx.fillRect(0, i * stripeHeight, CANVAS_WIDTH, stripeHeight);
+            }
+
+            // Pitch Markings
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(15, 15, CANVAS_WIDTH - 30, CANVAS_HEIGHT - 30);
+
+            // Defense Baseline (Invader warning line)
+            ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)';
+            ctx.setLineDash([8, 8]);
+            ctx.beginPath();
+            ctx.moveTo(15, ronaldo.y);
+            ctx.lineTo(CANVAS_WIDTH - 15, ronaldo.y);
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset dash
+        }
+
+        function gameLoop() {
+            ctx.save();
+            if (screenShake > 0) {
+                ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
+                screenShake--;
+            }
+
+            drawSoccerPitch();
+
+            if (currentState === STATE.PLAYING) {
+                ronaldo.update();
+                updateInvaders();
+
+                if (keys.Space) {
+                    shootPlayerBullet();
+                }
+
+                bullets.forEach(b => b.update());
+                checkCollisions();
+            }
+
+            // Render Game Components
+            messiGrid.forEach(m => m.draw());
+            bullets.forEach(b => b.draw());
+            ronaldo.draw();
+
+            // Render Particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].alpha <= 0) particles.splice(i, 1);
+            }
+
+            ctx.restore();
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (['Space', 'ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD'].includes(e.code)) {
+                e.preventDefault();
+            }
+            if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.Left = true;
+            if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.Right = true;
+            if (e.code === 'Space') keys.Space = true;
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'KeyA' || e.code === 'ArrowLeft') keys.Left = false;
+            if (e.code === 'KeyD' || e.code === 'ArrowRight') keys.Right = false;
+            if (e.code === 'Space') keys.Space = false;
+        });
+
+        // Mobile On-Screen Controls
+        const btnLeft = document.getElementById('btn-left');
+        const btnRight = document.getElementById('btn-right');
+        const btnShoot = document.getElementById('btn-shoot');
+
+        btnLeft.addEventListener('touchstart', (e) => { e.preventDefault(); keys.Left = true; });
+        btnLeft.addEventListener('touchend', (e) => { e.preventDefault(); keys.Left = false; });
+        btnLeft.addEventListener('mousedown', () => keys.Left = true);
+        btnLeft.addEventListener('mouseup', () => keys.Left = false);
+
+        btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); keys.Right = true; });
+        btnRight.addEventListener('touchend', (e) => { e.preventDefault(); keys.Right = false; });
+        btnRight.addEventListener('mousedown', () => keys.Right = true);
+        btnRight.addEventListener('mouseup', () => keys.Right = false);
+
+        btnShoot.addEventListener('click', () => {
+            sound.init();
+            shootPlayerBullet();
+        });
+
+        // Modal Action Buttons
+        document.getElementById('start-btn').addEventListener('click', () => {
+            sound.init();
+            resetGame();
+        });
+
+        document.getElementById('restart-win-btn').addEventListener('click', () => {
+            resetGame();
+        });
+
+        document.getElementById('restart-lose-btn').addEventListener('click', () => {
+            resetGame();
+        });
+
+        // Audio Toggle Button
+        document.getElementById('audio-toggle').addEventListener('click', () => {
+            sound.init();
+            sound.muted = !sound.muted;
+            document.getElementById('audio-icon').className = sound.muted ? 
+                'fa-solid fa-volume-xmark text-red-400' : 'fa-solid fa-volume-high text-slate-300';
+        });
+
+        // Initialize Loop on Window Load
+        window.onload = function () {
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>太空侵略者 Space Invaders</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      background: #0d0f18;
+      color: #fff;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+    .game-container {
+      position: relative;
+      border: 3px solid #334155;
+      border-radius: 8px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+      background: #000;
+    }
+    canvas {
+      display: block;
+      border-radius: 5px;
+    }
+    .hud {
+      position: absolute;
+      top: 12px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 18px;
+      font-weight: bold;
+      color: #38bdf8;
+      pointer-events: none;
+      text-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 5px;
+      backdrop-filter: blur(4px);
+    }
+    .overlay h1 {
+      font-size: 40px;
+      color: #ef4444;
+      margin-bottom: 12px;
+      text-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+    }
+    .overlay p {
+      font-size: 20px;
+      margin-bottom: 24px;
+      color: #cbd5e1;
+    }
+    .btn {
+      padding: 12px 28px;
+      font-size: 18px;
+      font-weight: bold;
+      color: #fff;
+      background: #2563eb;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.5);
+      transition: all 0.2s ease;
+    }
+    .btn:hover {
+      background: #1d4ed8;
+      transform: translateY(-2px);
+    }
+    .instructions {
+      margin-top: 15px;
+      color: #94a3b8;
+      font-size: 14px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="game-container">
+    <div class="hud">
+      <div id="scoreText">SCORE: 0</div>
+      <div id="highScoreText">HIGH: 0</div>
+    </div>
+    
+    <canvas id="gameCanvas" width="600" height="650"></canvas>
+
+    <div id="gameOverModal" class="overlay" style="display: none;">
+      <h1>GAME OVER</h1>
+      <p id="finalScoreText">最終得分：0</p>
+      <button class="btn" onclick="resetGame()">重新開始</button>
+    </div>
+  </div>
+
+  <div class="instructions">
+    [← / A] 左移 | [→ / D] 右移 | [空白鍵 Space] 射擊
+  </div>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+
+  const scoreText = document.getElementById('scoreText');
+  const highScoreText = document.getElementById('highScoreText');
+  const gameOverModal = document.getElementById('gameOverModal');
+  const finalScoreText = document.getElementById('finalScoreText');
+
+  // 遊戲狀態與數據
+  let score = 0;
+  let highScore = localStorage.getItem('invaders_high_score') || 0;
+  let isGameOver = false;
+  let animationId = null;
+
+  highScoreText.innerText = `HIGH: ${highScore}`;
+
+  // 按鍵狀態監聽
+  const keys = {
+    left: false,
+    right: false,
+    shoot: false,
+    shootPressed: false
+  };
+
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = true;
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = true;
+    if (e.code === 'Space') {
+      if (!keys.shootPressed) keys.shoot = true;
+      keys.shootPressed = true;
+      e.preventDefault();
+    }
+  });
+
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
+    if (e.code === 'ArrowRight' || e.code === 'KeyD') keys.right = false;
+    if (e.code === 'Space') {
+      keys.shoot = false;
+      keys.shootPressed = false;
+    }
+  });
+
+  // 飛船 (Player)
+  const player = {
+    x: canvas.width / 2 - 20,
+    y: canvas.height - 45,
+    width: 40,
+    height: 20,
+    speed: 5
+  };
+
+  // 子彈陣列
+  let playerBullets = [];
+  let alienBullets = [];
+
+  // 外星人設定
+  const alienRows = 4;
+  const alienCols = 8;
+  const alienWidth = 36;
+  const alienHeight = 24;
+  const alienPadding = 16;
+  const alienOffsetTop = 60;
+  const alienOffsetLeft = 40;
+
+  let aliens = [];
+  let alienDirection = 1; // 1 代表右，-1 代表左
+  let alienStepSpeed = 1.0; // 基礎移動速度
+  let alienDropDistance = 18; // 碰邊緣下沉距離
+
+  // 💥 爆炸粒子效果
+  let particles = [];
+
+  class Particle {
+    constructor(x, y, color) {
+      this.x = x;
+      this.y = y;
+      this.vx = (Math.random() - 0.5) * 6;
+      this.vy = (Math.random() - 0.5) * 6;
+      this.radius = Math.random() * 3 + 1;
+      this.color = color;
+      this.alpha = 1;
+      this.decay = Math.random() * 0.03 + 0.02;
+    }
+
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+      this.alpha -= this.decay;
+    }
+
+    draw() {
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, this.alpha);
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function createExplosion(x, y, color) {
+    for (let i = 0; i < 15; i++) {
+      particles.push(new Particle(x, y, color));
+    }
+  }
+
+  // 初始化外星人陣列
+  function initAliens() {
+    aliens = [];
+    alienDirection = 1;
+    alienStepSpeed = 1.0;
+
+    const colors = ['#f43f5e', '#a855f7', '#06b6d4', '#10b981'];
+
+    for (let r = 0; r < alienRows; r++) {
+      for (let c = 0; c < alienCols; c++) {
+        aliens.push({
+          x: alienOffsetLeft + c * (alienWidth + alienPadding),
+          y: alienOffsetTop + r * (alienHeight + alienPadding),
+          width: alienWidth,
+          height: alienHeight,
+          alive: true,
+          color: colors[r % colors.length]
+        });
+      }
+    }
+  }
+
+  // 繪製飛船 (綠色科技風)
+  function drawPlayer() {
+    ctx.fillStyle = '#10b981';
+    // 船身底座
+    ctx.fillRect(player.x, player.y + 8, player.width, player.height - 8);
+    // 砲管
+    ctx.fillRect(player.x + player.width / 2 - 3, player.y, 6, 8);
+  }
+
+  // 繪製外星人
+  function drawAliens() {
+    aliens.forEach(alien => {
+      if (!alien.alive) return;
+      ctx.fillStyle = alien.color;
+      
+      // 主體
+      ctx.fillRect(alien.x, alien.y + 4, alien.width, alien.height - 8);
+      // 觸角
+      ctx.fillRect(alien.x + 6, alien.y, 4, 4);
+      ctx.fillRect(alien.x + alien.width - 10, alien.y, 4, 4);
+      // 眼睛
+      ctx.fillStyle = '#000';
+      ctx.fillRect(alien.x + 8, alien.y + 8, 4, 4);
+      ctx.fillRect(alien.x + alien.width - 12, alien.y + 8, 4, 4);
+    });
+  }
+
+  // 繪製子彈
+  function drawBullets() {
+    // 玩家子彈 (螢光藍)
+    ctx.fillStyle = '#38bdf8';
+    playerBullets.forEach(b => {
+      ctx.fillRect(b.x, b.y, b.width, b.height);
+    });
+
+    // 外星人反擊子彈 (紅色)
+    ctx.fillStyle = '#ef4444';
+    alienBullets.forEach(b => {
+      ctx.fillRect(b.x, b.y, b.width, b.height);
+    });
+  }
+
+  // 更新邏輯
+  function update() {
+    if (isGameOver) return;
+
+    // 1. 移動飛船
+    if (keys.left && player.x > 0) {
+      player.x -= player.speed;
+    }
+    if (keys.right && player.x + player.width < canvas.width) {
+      player.x += player.speed;
+    }
+
+    // 2. 玩家發射子彈
+    if (keys.shoot) {
+      playerBullets.push({
+        x: player.x + player.width / 2 - 2,
+        y: player.y,
+        width: 4,
+        height: 12,
+        speed: 7
+      });
+      keys.shoot = false; // 單次發射，避免按住連發太猛
+    }
+
+    // 3. 移動玩家子彈
+    playerBullets.forEach((b, index) => {
+      b.y -= b.speed;
+      if (b.y < 0) playerBullets.splice(index, 1);
+    });
+
+    // 4. 外星人整體移動與邊界偵測
+    let moveDown = false;
+    let aliveCount = 0;
+
+    aliens.forEach(alien => {
+      if (!alien.alive) return;
+      aliveCount++;
+
+      if (alienDirection === 1 && alien.x + alien.width >= canvas.width - 15) {
+        moveDown = true;
+      } else if (alienDirection === -1 && alien.x <= 15) {
+        moveDown = true;
+      }
+    });
+
+    // 若全部外星人消滅 -> 補充新的一波並加載速度
+    if (aliveCount === 0) {
+      initAliens();
+      alienStepSpeed += 0.5;
+      return;
+    }
+
+    if (moveDown) {
+      alienDirection *= -1; // 換方向
+      alienStepSpeed += 0.2; // 稍微加速
+      aliens.forEach(alien => {
+        if (alien.alive) {
+          alien.y += alienDropDistance;
+          // 外星人壓到底線 -> Game Over
+          if (alien.y + alien.height >= player.y) {
+            triggerGameOver();
+          }
+        }
+      });
+    } else {
+      aliens.forEach(alien => {
+        if (alien.alive) {
+          alien.x += alienDirection * alienStepSpeed;
+        }
+      });
+    }
+
+    // 5. 外星人隨機反擊射擊
+    if (Math.random() < 0.02 + (1 - aliveCount / (alienRows * alienCols)) * 0.03) {
+      const activeAliens = aliens.filter(a => a.alive);
+      if (activeAliens.length > 0) {
+        const shooter = activeAliens[Math.floor(Math.random() * activeAliens.length)];
+        alienBullets.push({
+          x: shooter.x + shooter.width / 2 - 2,
+          y: shooter.y + shooter.height,
+          width: 4,
+          height: 10,
+          speed: 4 + alienStepSpeed * 0.3
+        });
+      }
+    }
+
+    // 6. 移動外星人子彈
+    alienBullets.forEach((b, index) => {
+      b.y += b.speed;
+
+      // 檢查是否打中玩家
+      if (
+        b.x < player.x + player.width &&
+        b.x + b.width > player.x &&
+        b.y < player.y + player.height &&
+        b.y + b.height > player.y
+      ) {
+        createExplosion(player.x + player.width / 2, player.y + player.height / 2, '#10b981');
+        triggerGameOver();
+      }
+
+      if (b.y > canvas.height) alienBullets.splice(index, 1);
+    });
+
+    // 7. 碰撞偵測：玩家子彈打中外星人
+    playerBullets.forEach((b, bIndex) => {
+      aliens.forEach(alien => {
+        if (!alien.alive) return;
+
+        if (
+          b.x < alien.x + alien.width &&
+          b.x + b.width > alien.x &&
+          b.y < alien.y + alien.height &&
+          b.y + b.height > alien.y
+        ) {
+          alien.alive = false;
+          playerBullets.splice(bIndex, 1);
+          score += 10;
+          scoreText.innerText = `SCORE: ${score}`;
+
+          // 💥 生成爆炸特效
+          createExplosion(alien.x + alien.width / 2, alien.y + alien.height / 2, alien.color);
+
+          if (score > highScore) {
+            highScore = score;
+            highScoreText.innerText = `HIGH: ${highScore}`;
+            localStorage.setItem('invaders_high_score', highScore);
+          }
+        }
+      });
+    });
+
+    // 8. 更新粒子動畫
+    particles.forEach((p, index) => {
+      p.update();
+      if (p.alpha <= 0) particles.splice(index, 1);
+    });
+  }
+
+  // 繪製全部畫面
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    drawPlayer();
+    drawAliens();
+    drawBullets();
+
+    // 繪製粒子特效
+    particles.forEach(p => p.draw());
+  }
+
+  // 主遊戲循環
+  function gameLoop() {
+    update();
+    draw();
+    if (!isGameOver) {
+      animationId = requestAnimationFrame(gameLoop);
+    }
+  }
+
+  // 觸發 Game Over
+  function triggerGameOver() {
+    isGameOver = true;
+    finalScoreText.innerText = `最終得分：${score}`;
+    gameOverModal.style.display = 'flex';
+  }
+
+  // 重設遊戲
+  function resetGame() {
+    score = 0;
+    scoreText.innerText = `SCORE: ${score}`;
+    isGameOver = false;
+    playerBullets = [];
+    alienBullets = [];
+    particles = [];
+    player.x = canvas.width / 2 - 20;
+
+    gameOverModal.style.display = 'none';
+
+    initAliens();
+    if (animationId) cancelAnimationFrame(animationId);
+    gameLoop();
+  }
+
+  // 啟動遊戲
+  initAliens();
+  gameLoop();
+</script>
+</body>
+</html>

@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Galactic Defender - Tactical Space Shooter</title>
+    <!-- Tailwind CSS for modern HUD styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800;900&family=Rajdhani:wght@500;600;700&display=swap');
+
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        body {
+            background-color: #030308;
+            font-family: 'Rajdhani', sans-serif;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        .font-orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        .glow-text-cyan {
+            text-shadow: 0 0 10px rgba(0, 243, 255, 0.7), 0 0 20px rgba(0, 243, 255, 0.4);
+        }
+
+        .glow-text-magenta {
+            text-shadow: 0 0 10px rgba(255, 0, 127, 0.7), 0 0 20px rgba(255, 0, 127, 0.4);
+        }
+
+        .glow-text-gold {
+            text-shadow: 0 0 10px rgba(255, 215, 0, 0.8), 0 0 20px rgba(255, 215, 0, 0.5);
+        }
+
+        .glass-panel {
+            background: rgba(10, 12, 28, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(0, 243, 255, 0.25);
+            box-shadow: 0 0 25px rgba(0, 243, 255, 0.15), inset 0 0 15px rgba(0, 243, 255, 0.05);
+        }
+
+        .skill-card {
+            transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background: linear-gradient(135deg, rgba(16, 20, 45, 0.95) 0%, rgba(8, 10, 25, 0.98) 100%);
+        }
+
+        .skill-card:hover {
+            transform: translateY(-5px) scale(1.02);
+            border-color: rgba(0, 243, 255, 0.8);
+            box-shadow: 0 10px 30px rgba(0, 243, 255, 0.3), inset 0 0 20px rgba(0, 243, 255, 0.1);
+        }
+
+        .btn-action {
+            background: linear-gradient(90deg, #00f3ff, #0066ff);
+            transition: all 0.2s ease;
+        }
+
+        .btn-action:hover {
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.6);
+            transform: scale(1.03);
+        }
+
+        .btn-action:active {
+            transform: scale(0.97);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: crosshair;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center relative select-none">
+
+    <!-- GAME CANVAS -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- TOP HUD OVERLAY -->
+    <div id="hud" class="absolute top-0 left-0 w-full p-4 pointer-events-none flex justify-between items-start z-10">
+        <!-- Left Stats -->
+        <div class="flex flex-col gap-1">
+            <div class="text-xs uppercase tracking-widest text-cyan-400 font-semibold">Mission Score</div>
+            <div id="scoreDisplay" class="text-3xl sm:text-4xl font-black font-orbitron text-white glow-text-cyan">0</div>
+            
+            <!-- Dynamic Progressive Skill Target Bar -->
+            <div class="w-52 sm:w-64 bg-slate-900/80 border border-cyan-500/30 h-4 rounded-full overflow-hidden mt-1 p-0.5 relative">
+                <div id="skillProgressBar" class="bg-gradient-to-r from-cyan-500 via-teal-400 to-amber-400 h-full rounded-full transition-all duration-300 w-0"></div>
+                <div id="skillProgressText" class="absolute inset-0 text-[9px] font-orbitron font-bold text-center text-white flex items-center justify-center drop-shadow">NEXT BUFF: 0 / 1000</div>
+            </div>
+
+            <!-- Health Hearts Display (5 Hits) -->
+            <div class="flex items-center gap-1.5 mt-1.5">
+                <div id="hpHearts" class="flex gap-1 text-red-500 text-lg drop-shadow-[0_0_8px_rgba(239,68,68,0.8)]">
+                    <span>❤️</span><span>❤️</span><span>❤️</span><span>❤️</span><span>❤️</span>
+                </div>
+                <span id="hpText" class="text-xs font-orbitron font-bold text-red-400 ml-1">HP: 5/5</span>
+            </div>
+        </div>
+
+        <!-- Right Stats & 3 Active Equipped Buff Slots -->
+        <div class="flex flex-col items-end gap-2">
+            <div class="flex items-center gap-3">
+                <div id="audioToggle" class="pointer-events-auto cursor-pointer p-2 rounded-lg glass-panel text-cyan-400 hover:text-white transition">
+                    <svg id="audioIconOn" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path></svg>
+                    <svg id="audioIconOff" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"></path></svg>
+                </div>
+                <div class="text-right">
+                    <div class="text-xs uppercase tracking-widest text-amber-400 font-semibold">Combo</div>
+                    <div id="comboDisplay" class="text-2xl font-black font-orbitron text-amber-300">x1</div>
+                </div>
+            </div>
+
+            <!-- Active 3 Slots Indicator -->
+            <div class="text-right">
+                <div class="text-[10px] uppercase font-orbitron font-bold text-slate-400 tracking-wider">EQUIPPED BUFFS (3 MAX)</div>
+                <div id="equippedSlotsContainer" class="flex gap-2 mt-1">
+                    <!-- 3 Slots rendered here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- START / MAIN MENU OVERLAY -->
+    <div id="startOverlay" class="absolute inset-0 z-30 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+        <div class="glass-panel p-8 sm:p-12 rounded-2xl max-w-md w-full text-center flex flex-col items-center border border-cyan-500/40">
+            <div class="inline-block p-3 rounded-full bg-cyan-500/10 mb-4 border border-cyan-400/30">
+                <svg class="w-12 h-12 text-cyan-400 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+            </div>
+            <h1 class="text-3xl sm:text-4xl font-black font-orbitron text-white glow-text-cyan mb-2">GALACTIC DEFENDER</h1>
+            <p class="text-slate-300 text-sm mb-4 leading-relaxed">Defend space against foreign armadas!</p>
+            
+            <div class="bg-slate-900/80 rounded-xl p-4 w-full mb-6 border border-slate-800 text-xs text-slate-300 text-left space-y-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-amber-400 font-bold">🎯 Score Progression:</span>
+                    <span>1st Buff @ 1000 pts, +2000 for 2nd, +3000 for 3rd...</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-cyan-400 font-bold">🛡️ Max Buff Capacity:</span>
+                    <span>Hold max 3 Buffs. Level up to <span class="text-amber-400 font-bold">Lvl 10 Max</span>!</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-red-400 font-bold">❤️ Health & Hits:</span>
+                    <span>5 Hearts total (5 Hits allowed).</span>
+                </div>
+            </div>
+
+            <button id="startBtn" class="btn-action w-full py-4 rounded-xl text-slate-950 font-orbitron font-black text-lg tracking-wider uppercase shadow-lg">
+                ENGAGE MISSION
+            </button>
+        </div>
+    </div>
+
+    <!-- SKILL SELECTION MODAL -->
+    <div id="skillOverlay" class="absolute inset-0 z-40 hidden flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-lg">
+        <div class="max-w-3xl w-full flex flex-col items-center">
+            <div class="text-center mb-6">
+                <span class="text-amber-400 font-orbitron text-xs tracking-widest font-extrabold uppercase bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/30">BUFF UNLOCKED</span>
+                <h2 class="text-3xl sm:text-4xl font-black font-orbitron text-white glow-text-gold mt-2">CHOOSE AN UPGRADE</h2>
+                <p id="skillModalSubtitle" class="text-slate-400 text-sm mt-1">Select 1 tactical system upgrade</p>
+            </div>
+
+            <!-- 3 Skill Cards Container -->
+            <div id="skillsCardContainer" class="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+                <!-- Skill Cards Inserted via JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- SLOT REPLACEMENT MODAL (When 3/3 Full and new skill is selected) -->
+    <div id="replaceOverlay" class="absolute inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-xl">
+        <div class="max-w-xl w-full glass-panel p-6 sm:p-8 rounded-2xl text-center border border-amber-500/50">
+            <span class="text-amber-400 font-orbitron text-xs tracking-widest font-extrabold uppercase bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/30">BUFF CAPACITY FULL (3/3)</span>
+            <h2 class="text-2xl sm:text-3xl font-black font-orbitron text-white glow-text-gold mt-2">SWAP EQUIPPED BUFF</h2>
+            <p class="text-slate-300 text-sm mt-1 mb-6">Choose an existing equipped Buff slot to replace with your new choice, or discard the offer.</p>
+
+            <!-- Offered New Skill Preview -->
+            <div id="newSkillPreview" class="mb-6 p-4 rounded-xl bg-cyan-950/40 border border-cyan-500/50 flex items-center gap-4 text-left">
+                <!-- Inserted via JS -->
+            </div>
+
+            <p class="text-xs font-orbitron text-amber-400 font-bold mb-3 uppercase tracking-wider">SELECT A SLOT TO OVERWRITE:</p>
+            <div id="replaceSlotsContainer" class="grid grid-cols-1 gap-3 mb-6">
+                <!-- Replace slots inserted via JS -->
+            </div>
+
+            <button id="cancelReplaceBtn" class="w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-orbitron font-bold text-xs uppercase tracking-wider border border-slate-700">
+                DISCARD NEW BUFF
+            </button>
+        </div>
+    </div>
+
+    <!-- GAME OVER OVERLAY -->
+    <div id="gameOverOverlay" class="absolute inset-0 z-30 hidden flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+        <div class="glass-panel p-8 sm:p-10 rounded-2xl max-w-md w-full text-center flex flex-col items-center border border-red-500/40">
+            <h2 class="text-3xl sm:text-4xl font-black font-orbitron text-red-500 glow-text-magenta mb-2">MISSION FAILED</h2>
+            <p class="text-slate-400 text-sm mb-6">Your rocket was destroyed in deep space.</p>
+
+            <div class="grid grid-cols-2 gap-4 w-full mb-6">
+                <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                    <div class="text-xs text-slate-400 uppercase font-bold">Final Score</div>
+                    <div id="finalScore" class="text-2xl font-black font-orbitron text-cyan-400">0</div>
+                </div>
+                <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800">
+                    <div class="text-xs text-slate-400 uppercase font-bold">Max Combo</div>
+                    <div id="finalCombo" class="text-2xl font-black font-orbitron text-amber-400">x1</div>
+                </div>
+            </div>
+
+            <button id="restartBtn" class="btn-action w-full py-4 rounded-xl text-slate-950 font-orbitron font-black text-lg tracking-wider uppercase shadow-lg">
+                REDEPLOY ROCKET
+            </button>
+        </div>
+    </div>
+
+    <!-- MOBILE TOUCH CONTROLS -->
+    <div id="mobileControls" class="absolute bottom-4 inset-x-4 pointer-events-none flex justify-between items-end md:hidden z-20 opacity-70">
+        <div class="flex gap-3 pointer-events-auto">
+            <button id="btnLeft" class="w-16 h-16 rounded-2xl glass-panel flex items-center justify-center text-cyan-400 active:bg-cyan-500/30">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"></path></svg>
+            </button>
+            <button id="btnRight" class="w-16 h-16 rounded-2xl glass-panel flex items-center justify-center text-cyan-400 active:bg-cyan-500/30">
+                <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"></path></svg>
+            </button>
+        </div>
+        <button id="btnFire" class="w-20 h-20 rounded-full glass-panel border-amber-500/50 flex items-center justify-center text-amber-400 pointer-events-auto active:bg-amber-500/30">
+            <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+        </button>
+    </div>
+
+<script>
+// WEB AUDIO SYNTHESIZER
+class SoundEngine {
+    constructor() {
+        this.ctx = null;
+        this.muted = false;
+    }
+
+    init() {
+        if (!this.ctx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioContext();
+        }
+    }
+
+    playLaser() {
+        if (this.muted || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(850, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(120, this.ctx.currentTime + 0.1);
+        gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.1);
+    }
+
+    playExplosion(isBoss = false) {
+        if (this.muted || !this.ctx) return;
+        const duration = isBoss ? 0.6 : 0.25;
+        const bufferSize = this.ctx.sampleRate * duration;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(isBoss ? 350 : 700, this.ctx.currentTime);
+        filter.frequency.linearRampToValueAtTime(40, this.ctx.currentTime + duration);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(isBoss ? 0.4 : 0.22, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start();
+    }
+
+    playLevelUp() {
+        if (this.muted || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99];
+        notes.forEach((freq, idx) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + idx * 0.05);
+            gain.gain.setValueAtTime(0.2, now + idx * 0.05);
+            gain.gain.linearRampToValueAtTime(0.01, now + idx * 0.05 + 0.12);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + idx * 0.05);
+            osc.stop(now + idx * 0.05 + 0.12);
+        });
+    }
+
+    playNuke() {
+        if (this.muted || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(120, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(900, this.ctx.currentTime + 0.5);
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.5);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.5);
+    }
+}
+
+const soundEngine = new SoundEngine();
+
+// DEFINITION OF ALL UPGRADEABLE SKILLS (UP TO LEVEL 10 MAX)
+const ALL_SKILLS = [
+    {
+        id: 'bigger_bullets',
+        name: 'Plasma Magnifier',
+        desc: 'Massively increases missile size and hit radius per level.',
+        icon: '💥',
+        color: 'from-amber-500 to-orange-600',
+        getStatText: (lvl) => `Scale: +${lvl * 40}% Size`
+    },
+    {
+        id: 'fast_fire',
+        name: 'Rapid Reloader',
+        desc: 'Increases missile firing speed & attack frequency.',
+        icon: '⚡',
+        color: 'from-yellow-400 to-amber-600',
+        getStatText: (lvl) => `Firing Delay: -${Math.round((1 - Math.pow(0.85, lvl)) * 100)}%`
+    },
+    {
+        id: 'multi_shot',
+        name: 'Spread Cannons',
+        desc: 'Fires multiple missiles in a wide arc angle.',
+        icon: '🔱',
+        color: 'from-cyan-400 to-blue-600',
+        getStatText: (lvl) => `Projectiles: ${1 + lvl} Missiles`
+    },
+    {
+        id: 'missile_speed',
+        name: 'Hyper Velocity',
+        desc: 'Boosts missile velocity and impact damage.',
+        icon: '🚀',
+        color: 'from-blue-500 to-indigo-600',
+        getStatText: (lvl) => `Velocity: +${lvl * 30}% Speed`
+    },
+    {
+        id: 'rocket_speed',
+        name: 'Agile Engine',
+        desc: 'Increases player rocket maneuvering speed.',
+        icon: '💨',
+        color: 'from-emerald-400 to-teal-600',
+        getStatText: (lvl) => `Maneuver: +${lvl * 25}% Speed`
+    },
+    {
+        id: 'piercing',
+        name: 'Quantum Piercer',
+        desc: 'Missiles punch through multiple aliens before dissipating.',
+        icon: '🗡️',
+        color: 'from-purple-500 to-pink-600',
+        getStatText: (lvl) => `Pierces: ${lvl} Targets`
+    },
+    {
+        id: 'homing',
+        name: 'Smart Seekers',
+        desc: 'Missiles track and home in on target aliens.',
+        icon: '🎯',
+        color: 'from-rose-500 to-red-600',
+        getStatText: (lvl) => `Homing Steering: Lvl ${lvl}`
+    },
+    {
+        id: 'energy_shield',
+        name: 'Aegis Shield',
+        desc: 'Generates protective energy shield charges.',
+        icon: '🛡️',
+        color: 'from-teal-400 to-cyan-600',
+        getStatText: (lvl) => `Shield Charges: ${lvl}`
+    },
+    {
+        id: 'screen_nuke',
+        name: 'Orbital Strike',
+        desc: 'Clears regular aliens on screen when leveled up.',
+        icon: '💣',
+        color: 'from-red-600 to-rose-700',
+        getStatText: (lvl) => `Nuke Burst: Lvl ${lvl}`
+    }
+];
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let width, height;
+let gameRunning = false;
+let gamePaused = false;
+let score = 0;
+
+// Dynamic Score Threshold Logic
+let currentScoreTarget = 1000;
+let previousScoreTarget = 0;
+let skillGrantedCount = 0; // Number of skills obtained so far
+
+let combo = 1;
+let comboTimer = 0;
+let keys = {};
+
+// Max 3 Equipped Buff Slots: [{ id, level }]
+let equippedSkills = [];
+let pendingNewSkill = null; // Used for replacement modal
+
+// Screen shake effect
+let screenShake = 0;
+
+// Mobile touch
+let touchX = null;
+let isTouching = false;
+
+function resizeCanvas() {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// Starfield Background
+const stars = [];
+for (let i = 0; i < 140; i++) {
+    stars.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        size: Math.random() * 2 + 0.5,
+        speed: Math.random() * 1.5 + 0.3,
+        color: Math.random() > 0.85 ? '#00f3ff' : '#ffffff'
+    });
+}
+
+// Particle System
+const particles = [];
+class Particle {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.radius = Math.random() * 3 + 1;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = Math.random() * 6 + 1;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.alpha = 1;
+        this.decay = Math.random() * 0.03 + 0.015;
+    }
+
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.alpha -= this.decay;
+    }
+
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.alpha);
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+    }
+}
+
+// PLAYER ROCKET
+const player = {
+    x: width / 2,
+    y: height - 100,
+    width: 44,
+    height: 56,
+    hp: 5,        // 5 Hearts / Hits
+    maxHp: 5,
+    invulnerableTimer: 0,
+    lastShoot: 0,
+
+    // Calculated Skill Stats (Updated dynamically)
+    baseSpeed: 7,
+    speed: 7,
+    shootDelay: 220,
+    bulletScale: 1,
+    bulletSpeed: 10,
+    multiShotCount: 1,
+    piercingCount: 0,
+    homingLevel: 0,
+    shields: 0,
+
+    reset() {
+        this.x = width / 2;
+        this.y = height - 100;
+        this.hp = 5;
+        this.maxHp = 5;
+        this.invulnerableTimer = 0;
+        this.recalculateStats();
+    },
+
+    recalculateStats() {
+        // Reset defaults
+        this.speed = this.baseSpeed;
+        this.shootDelay = 220;
+        this.bulletScale = 1;
+        this.bulletSpeed = 10;
+        this.multiShotCount = 1;
+        this.piercingCount = 0;
+        this.homingLevel = 0;
+        this.shields = 0;
+
+        // Apply equipped skills according to their levels (1..10)
+        equippedSkills.forEach(item => {
+            const lvl = item.level;
+            switch (item.id) {
+                case 'bigger_bullets':
+                    this.bulletScale = 1 + lvl * 0.4;
+                    break;
+                case 'fast_fire':
+                    this.shootDelay = Math.max(50, 220 * Math.pow(0.85, lvl));
+                    break;
+                case 'multi_shot':
+                    this.multiShotCount = 1 + lvl;
+                    break;
+                case 'missile_speed':
+                    this.bulletSpeed = 10 * (1 + lvl * 0.3);
+                    break;
+                case 'rocket_speed':
+                    this.speed = this.baseSpeed * (1 + lvl * 0.25);
+                    break;
+                case 'piercing':
+                    this.piercingCount = lvl;
+                    break;
+                case 'homing':
+                    this.homingLevel = lvl;
+                    break;
+                case 'energy_shield':
+                    this.shields = lvl;
+                    break;
+            }
+        });
+    },
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        // Invulnerability flashing effect
+        if (this.invulnerableTimer > 0 && Math.floor(this.invulnerableTimer / 4) % 2 === 0) {
+            ctx.globalAlpha = 0.4;
+        }
+
+        // Rocket Flame Animation
+        const flameLength = Math.random() * 14 + 10;
+        const flameGrad = ctx.createLinearGradient(0, this.height / 2, 0, this.height / 2 + flameLength);
+        flameGrad.addColorStop(0, '#00f3ff');
+        flameGrad.addColorStop(0.5, '#ff007f');
+        flameGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = flameGrad;
+        ctx.beginPath();
+        ctx.moveTo(-10, this.height / 2 - 4);
+        ctx.lineTo(10, this.height / 2 - 4);
+        ctx.lineTo(0, this.height / 2 + flameLength);
+        ctx.closePath();
+        ctx.fill();
+
+        // Rocket Metallic Hull
+        ctx.fillStyle = '#1e293b';
+        ctx.strokeStyle = '#00f3ff';
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = '#00f3ff';
+
+        ctx.beginPath();
+        ctx.moveTo(0, -this.height / 2);
+        ctx.lineTo(this.width / 2, this.height / 2);
+        ctx.lineTo(this.width / 4, this.height / 2 - 6);
+        ctx.lineTo(-this.width / 4, this.height / 2 - 6);
+        ctx.lineTo(-this.width / 2, this.height / 2);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+
+        // Glass Cockpit
+        ctx.fillStyle = '#00f3ff';
+        ctx.beginPath();
+        ctx.ellipse(0, -6, 6, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Shield Dome Effect
+        if (this.shields > 0) {
+            ctx.strokeStyle = '#00f3ff';
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#00f3ff';
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.arc(0, 0, this.width * 0.85, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    },
+
+    move() {
+        if (keys['ArrowLeft'] || keys['KeyA']) this.x -= this.speed;
+        if (keys['ArrowRight'] || keys['KeyD']) this.x += this.speed;
+
+        if (touchX !== null) {
+            const dx = touchX - this.x;
+            this.x += dx * 0.2;
+        }
+
+        this.x = Math.max(this.width / 2 + 10, Math.min(width - this.width / 2 - 10, this.x));
+
+        if (this.invulnerableTimer > 0) this.invulnerableTimer--;
+    }
+};
+
+// MISSILES / BULLETS
+const bullets = [];
+class Bullet {
+    constructor(x, y, angle = -Math.PI / 2) {
+        this.x = x;
+        this.y = y;
+        this.angle = angle;
+        this.speed = player.bulletSpeed;
+        this.radius = 4 * player.bulletScale;
+        this.pierces = player.piercingCount;
+        this.homingLevel = player.homingLevel;
+    }
+
+    update() {
+        if (this.homingLevel > 0 && aliens.length > 0) {
+            let closest = null;
+            let minDist = Infinity;
+            aliens.forEach(a => {
+                const dist = Math.hypot(a.x - this.x, a.y - this.y);
+                if (dist < minDist) {
+                    minDist = dist;
+                    closest = a;
+                }
+            });
+            if (closest) {
+                const targetAngle = Math.atan2(closest.y - this.y, closest.x - this.x);
+                let diff = targetAngle - this.angle;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                this.angle += diff * (0.04 + this.homingLevel * 0.02);
+            }
+        }
+
+        this.x += Math.cos(this.angle) * this.speed;
+        this.y += Math.sin(this.angle) * this.speed;
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle + Math.PI / 2);
+
+        ctx.fillStyle = '#00f3ff';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#00f3ff';
+
+        ctx.beginPath();
+        ctx.ellipse(0, 0, this.radius, this.radius * 2.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
+// ALIEN ENEMIES
+const aliens = [];
+class Alien {
+    constructor(type = 'grunt') {
+        this.type = type;
+        this.x = Math.random() * (width - 80) + 40;
+        this.y = -60;
+
+        if (type === 'grunt') {
+            this.width = 38;
+            this.height = 38;
+            this.hp = 1;
+            this.maxHp = 1;
+            this.speed = Math.random() * 1.5 + 1.5;
+            this.color = '#76ff03';
+            this.points = 25;
+        } else if (type === 'scout') {
+            this.width = 30;
+            this.height = 30;
+            this.hp = 1;
+            this.maxHp = 1;
+            this.speed = Math.random() * 2 + 3.5;
+            this.color = '#ff007f';
+            this.points = 40;
+        } else if (type === 'tank') {
+            this.width = 54;
+            this.height = 54;
+            this.hp = 5;
+            this.maxHp = 5;
+            this.speed = Math.random() * 0.8 + 0.8;
+            this.color = '#ff9900';
+            this.points = 80;
+        } else if (type === 'boss') {
+            this.width = 120;
+            this.height = 85;
+            this.hp = 45;
+            this.maxHp = 45;
+            this.speed = 0.8;
+            this.x = width / 2;
+            this.color = '#a855f7';
+            this.points = 350;
+            this.sineOffset = 0;
+        }
+    }
+
+    update() {
+        if (this.type === 'boss') {
+            this.sineOffset += 0.03;
+            this.x += Math.cos(this.sineOffset) * 3;
+            if (this.y < 120) this.y += this.speed;
+        } else {
+            this.y += this.speed;
+        }
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        ctx.fillStyle = this.color;
+        ctx.shadowBlur = 12;
+        ctx.shadowColor = this.color;
+
+        if (this.type === 'grunt') {
+            ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = (i * Math.PI) / 3;
+                const px = Math.cos(angle) * (this.width / 2);
+                const py = Math.sin(angle) * (this.height / 2);
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+        } else if (this.type === 'scout') {
+            ctx.beginPath();
+            ctx.moveTo(0, this.height / 2);
+            ctx.lineTo(-this.width / 2, -this.height / 2);
+            ctx.lineTo(this.width / 2, -this.height / 2);
+            ctx.closePath();
+            ctx.fill();
+        } else if (this.type === 'tank') {
+            ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
+        } else if (this.type === 'boss') {
+            ctx.beginPath();
+            ctx.moveTo(0, this.height / 2);
+            ctx.lineTo(-this.width / 2, -this.height / 4);
+            ctx.lineTo(-this.width / 3, -this.height / 2);
+            ctx.lineTo(this.width / 3, -this.height / 2);
+            ctx.lineTo(this.width / 2, -this.height / 4);
+            ctx.closePath();
+            ctx.fill();
+
+            // Boss HP Bar
+            const barW = this.width;
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(-barW / 2, -this.height / 2 - 15, barW, 6);
+            ctx.fillStyle = '#ff007f';
+            ctx.fillRect(-barW / 2, -this.height / 2 - 15, barW * (this.hp / this.maxHp), 6);
+        }
+
+        ctx.restore();
+    }
+}
+
+function fireMissile() {
+    const now = performance.now();
+    if (now - player.lastShoot < player.shootDelay) return;
+    player.lastShoot = now;
+
+    soundEngine.playLaser();
+
+    const count = player.multiShotCount;
+    if (count === 1) {
+        bullets.push(new Bullet(player.x, player.y - player.height / 2));
+    } else {
+        const spreadArc = Math.PI / 4;
+        const startAngle = -Math.PI / 2 - spreadArc / 2;
+        const step = spreadArc / (count - 1);
+        for (let i = 0; i < count; i++) {
+            bullets.push(new Bullet(player.x, player.y - player.height / 2, startAngle + step * i));
+        }
+    }
+}
+
+// DYNAMIC PROGRESSIVE SCORE TARGET CHECK
+function checkSkillLevelUp() {
+    if (score >= currentScoreTarget) {
+        previousScoreTarget = currentScoreTarget;
+        skillGrantedCount++;
+        // Formula: Next Target = Current Target + (skillGrantedCount + 1) * 1000
+        currentScoreTarget = previousScoreTarget + (skillGrantedCount + 1) * 1000;
+        
+        triggerSkillModal();
+    }
+}
+
+function triggerSkillModal() {
+    gamePaused = true;
+    soundEngine.playLevelUp();
+
+    // Randomize 3 choices
+    const shuffled = [...ALL_SKILLS].sort(() => 0.5 - Math.random());
+    const choices = shuffled.slice(0, 3);
+
+    const container = document.getElementById('skillsCardContainer');
+    container.innerHTML = '';
+
+    choices.forEach(skill => {
+        // Find if already equipped
+        const equippedItem = equippedSkills.find(s => s.id === skill.id);
+        const currentLvl = equippedItem ? equippedItem.level : 0;
+        const isMax = currentLvl >= 10;
+
+        const card = document.createElement('div');
+        card.className = 'skill-card p-5 rounded-2xl border border-slate-700/60 cursor-pointer flex flex-col items-center text-center relative overflow-hidden';
+        
+        let levelBadge = currentLvl > 0 
+            ? `<span class="absolute top-3 right-3 text-[10px] font-orbitron font-extrabold px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">${isMax ? 'MAX (Lvl 10)' : 'Lvl ' + currentLvl + ' → ' + (currentLvl + 1)}</span>`
+            : `<span class="absolute top-3 right-3 text-[10px] font-orbitron font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">NEW BUFF</span>`;
+
+        card.innerHTML = `
+            ${levelBadge}
+            <div class="text-4xl mb-3 bg-slate-800/80 p-3 rounded-2xl border border-slate-700/80">${skill.icon}</div>
+            <h3 class="text-lg font-black font-orbitron text-white mb-1">${skill.name}</h3>
+            <p class="text-slate-400 text-xs mb-3 leading-snug">${skill.desc}</p>
+            <div class="text-amber-300 font-orbitron font-bold text-xs mb-4">${skill.getStatText(currentLvl + 1)}</div>
+            <button class="mt-auto w-full py-2.5 rounded-xl bg-gradient-to-r ${skill.color} text-white font-orbitron font-bold text-xs uppercase tracking-wider shadow">
+                ${isMax ? 'MAXED OUT' : (currentLvl > 0 ? 'LEVEL UP' : 'SELECT BUFF')}
+            </button>
+        `;
+
+        if (!isMax) {
+            card.addEventListener('click', () => {
+                handleSkillSelection(skill);
+            });
+        }
+
+        container.appendChild(card);
+    });
+
+    document.getElementById('skillOverlay').classList.remove('hidden');
+}
+
+function handleSkillSelection(skill) {
+    const existingIndex = equippedSkills.findIndex(s => s.id === skill.id);
+
+    // Case 1: Already equipped -> Level it up directly
+    if (existingIndex !== -1) {
+        if (equippedSkills[existingIndex].level < 10) {
+            equippedSkills[existingIndex].level++;
+        }
+        player.recalculateStats();
+        updateActiveSkillsUI();
+        closeSkillModal();
+        return;
+    }
+
+    // Case 2: Not equipped & Slots available (< 3) -> Equip in new slot
+    if (equippedSkills.length < 3) {
+        equippedSkills.push({ id: skill.id, level: 1 });
+        player.recalculateStats();
+        updateActiveSkillsUI();
+        closeSkillModal();
+        return;
+    }
+
+    // Case 3: Slots full (3/3) & New Skill -> Open Replace Modal
+    pendingNewSkill = skill;
+    openReplaceModal();
+}
+
+function openReplaceModal() {
+    document.getElementById('skillOverlay').classList.add('hidden');
+    
+    // Preview offered skill
+    const previewContainer = document.getElementById('newSkillPreview');
+    previewContainer.innerHTML = `
+        <div class="text-3xl bg-slate-800 p-2.5 rounded-xl border border-cyan-500/40">${pendingNewSkill.icon}</div>
+        <div>
+            <div class="text-white font-orbitron font-bold text-sm">${pendingNewSkill.name} (Lvl 1)</div>
+            <div class="text-slate-400 text-xs">${pendingNewSkill.desc}</div>
+        </div>
+    `;
+
+    // Render 3 slot choices to replace
+    const replaceContainer = document.getElementById('replaceSlotsContainer');
+    replaceContainer.innerHTML = '';
+
+    equippedSkills.forEach((equipped, idx) => {
+        const fullSkill = ALL_SKILLS.find(s => s.id === equipped.id);
+        const slotBtn = document.createElement('button');
+        slotBtn.className = 'w-full p-3 rounded-xl bg-slate-900 hover:bg-red-950/40 border border-slate-700 hover:border-red-500/60 text-left flex items-center justify-between transition group';
+        slotBtn.innerHTML = `
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">${fullSkill.icon}</span>
+                <div>
+                    <div class="text-white font-orbitron font-bold text-xs group-hover:text-red-400">${fullSkill.name}</div>
+                    <div class="text-slate-400 text-[10px]">Level ${equipped.level} / 10</div>
+                </div>
+            </div>
+            <span class="text-xs font-orbitron font-bold text-red-400 opacity-0 group-hover:opacity-100 uppercase">REPLACE SLOT ${idx + 1}</span>
+        `;
+
+        slotBtn.addEventListener('click', () => {
+            // Replace slot
+            equippedSkills[idx] = { id: pendingNewSkill.id, level: 1 };
+            player.recalculateStats();
+            updateActiveSkillsUI();
+            closeReplaceModal();
+        });
+
+        replaceContainer.appendChild(slotBtn);
+    });
+
+    document.getElementById('replaceOverlay').classList.remove('hidden');
+}
+
+function closeReplaceModal() {
+    document.getElementById('replaceOverlay').classList.add('hidden');
+    pendingNewSkill = null;
+    gamePaused = false;
+}
+
+document.getElementById('cancelReplaceBtn').addEventListener('click', () => {
+    closeReplaceModal();
+});
+
+function closeSkillModal() {
+    document.getElementById('skillOverlay').classList.add('hidden');
+    
+    // Trigger screen nuke if player chose Orbital Strike
+    const nukeSkill = equippedSkills.find(s => s.id === 'screen_nuke');
+    if (nukeSkill) {
+        triggerScreenNuke();
+    }
+
+    gamePaused = false;
+}
+
+function triggerScreenNuke() {
+    soundEngine.playNuke();
+    screenShake = 15;
+    aliens.forEach(alien => {
+        if (alien.type !== 'boss') {
+            createExplosion(alien.x, alien.y, alien.color);
+            score += alien.points;
+        }
+    });
+    for (let i = aliens.length - 1; i >= 0; i--) {
+        if (aliens[i].type !== 'boss') aliens.splice(i, 1);
+    }
+}
+
+function updateActiveSkillsUI() {
+    const container = document.getElementById('equippedSlotsContainer');
+    container.innerHTML = '';
+
+    for (let i = 0; i < 3; i++) {
+        const slot = equippedSkills[i];
+        const slotDiv = document.createElement('div');
+
+        if (slot) {
+            const fullSkill = ALL_SKILLS.find(s => s.id === slot.id);
+            const isMax = slot.level >= 10;
+            slotDiv.className = 'w-16 h-16 rounded-xl glass-panel border border-cyan-500/50 flex flex-col items-center justify-between p-1.5 relative overflow-hidden';
+            slotDiv.innerHTML = `
+                <span class="text-xl mt-0.5">${fullSkill.icon}</span>
+                <span class="text-[9px] font-orbitron font-extrabold ${isMax ? 'text-amber-400' : 'text-cyan-300'}">${isMax ? 'MAX' : 'LVL ' + slot.level}</span>
+                <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                    <div class="bg-cyan-400 h-full" style="width: ${(slot.level / 10) * 100}%"></div>
+                </div>
+            `;
+        } else {
+            slotDiv.className = 'w-16 h-16 rounded-xl border border-dashed border-slate-700/80 bg-slate-900/40 flex flex-col items-center justify-center text-slate-600';
+            slotDiv.innerHTML = `<span class="text-xs font-orbitron font-bold">SLOT ${i + 1}</span>`;
+        }
+
+        container.appendChild(slotDiv);
+    }
+}
+
+function createExplosion(x, y, color = '#ff5500') {
+    for (let i = 0; i < 18; i++) {
+        particles.push(new Particle(x, y, color));
+    }
+}
+
+let spawnTimer = 0;
+let bossSpawnScoreThreshold = 1000;
+
+function spawnEnemies() {
+    spawnTimer++;
+    if (spawnTimer % 50 === 0) {
+        const rand = Math.random();
+        if (rand < 0.55) aliens.push(new Alien('grunt'));
+        else if (rand < 0.8) aliens.push(new Alien('scout'));
+        else aliens.push(new Alien('tank'));
+    }
+
+    if (score >= bossSpawnScoreThreshold) {
+        bossSpawnScoreThreshold += 1500;
+        aliens.push(new Alien('boss'));
+    }
+}
+
+function update() {
+    if (!gameRunning || gamePaused) return;
+
+    player.move();
+
+    if (keys['Space'] || isTouching) {
+        fireMissile();
+    }
+
+    // Update Missiles
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        b.update();
+
+        if (b.y < -30 || b.x < -30 || b.x > width + 30) {
+            bullets.splice(i, 1);
+        }
+    }
+
+    // Update Enemies & Collisions
+    spawnEnemies();
+
+    for (let i = aliens.length - 1; i >= 0; i--) {
+        const a = aliens[i];
+        a.update();
+
+        // Rocket vs Alien Hit
+        const distToPlayer = Math.hypot(a.x - player.x, a.y - player.y);
+        if (distToPlayer < (a.width / 2 + player.width / 2)) {
+            if (player.invulnerableTimer <= 0) {
+                createExplosion(a.x, a.y, a.color);
+                soundEngine.playExplosion(a.type === 'boss');
+                screenShake = 12;
+
+                if (player.shields > 0) {
+                    player.shields--;
+                } else {
+                    player.hp -= 1; // Subtract 1 Heart
+                }
+
+                player.invulnerableTimer = 40; // i-frames
+                aliens.splice(i, 1);
+
+                if (player.hp <= 0) {
+                    endGame();
+                    return;
+                }
+            }
+            continue;
+        }
+
+        // Alien reaches bottom
+        if (a.y > height + 60) {
+            aliens.splice(i, 1);
+            combo = 1;
+            continue;
+        }
+
+        // Missile vs Alien
+        for (let j = bullets.length - 1; j >= 0; j--) {
+            const b = bullets[j];
+            const distToBullet = Math.hypot(a.x - b.x, a.y - b.y);
+
+            if (distToBullet < (a.width / 2 + b.radius)) {
+                a.hp--;
+                createExplosion(b.x, b.y, '#00f3ff');
+
+                if (b.pierces <= 0) {
+                    bullets.splice(j, 1);
+                } else {
+                    b.pierces--;
+                }
+
+                if (a.hp <= 0) {
+                    createExplosion(a.x, a.y, a.color);
+                    soundEngine.playExplosion(a.type === 'boss');
+
+                    score += a.points * combo;
+                    combo = Math.min(10, combo + 1);
+                    comboTimer = 180;
+
+                    aliens.splice(i, 1);
+                    checkSkillLevelUp();
+                }
+                break;
+            }
+        }
+    }
+
+    // Update Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        particles[i].update();
+        if (particles[i].alpha <= 0) particles.splice(i, 1);
+    }
+
+    // Combo Decay
+    if (comboTimer > 0) {
+        comboTimer--;
+        if (comboTimer <= 0) combo = 1;
+    }
+
+    // HUD Updates
+    document.getElementById('scoreDisplay').innerText = score;
+    document.getElementById('comboDisplay').innerText = `x${combo}`;
+    
+    // Hearts Display
+    const heartsContainer = document.getElementById('hpHearts');
+    heartsContainer.innerHTML = '';
+    for (let h = 0; h < player.maxHp; h++) {
+        const heartSpan = document.createElement('span');
+        heartSpan.innerText = '❤️';
+        if (h >= player.hp) {
+            heartSpan.style.opacity = '0.2';
+            heartSpan.style.filter = 'grayscale(100%)';
+        }
+        heartsContainer.appendChild(heartSpan);
+    }
+    document.getElementById('hpText').innerText = `HP: ${Math.max(0, player.hp)}/${player.maxHp}`;
+
+    // Dynamic Progressive Target Progress Bar
+    const currentSegmentScore = score - previousScoreTarget;
+    const currentSegmentNeeded = currentScoreTarget - previousScoreTarget;
+    const progressPercent = Math.min(100, Math.max(0, (currentSegmentScore / currentSegmentNeeded) * 100));
+    
+    document.getElementById('skillProgressBar').style.width = `${progressPercent}%`;
+    document.getElementById('skillProgressText').innerText = `NEXT BUFF: ${score} / ${currentScoreTarget}`;
+}
+
+function render() {
+    ctx.save();
+
+    // Screen Shake
+    if (screenShake > 0) {
+        const shakeX = (Math.random() - 0.5) * screenShake;
+        const shakeY = (Math.random() - 0.5) * screenShake;
+        ctx.translate(shakeX, shakeY);
+        screenShake *= 0.88;
+        if (screenShake < 0.5) screenShake = 0;
+    }
+
+    // Canvas Background
+    ctx.fillStyle = '#030308';
+    ctx.fillRect(0, 0, width, height);
+
+    // Stars
+    stars.forEach(s => {
+        ctx.fillStyle = s.color;
+        ctx.fillRect(s.x, s.y, s.size, s.size);
+        s.y += s.speed;
+        if (s.y > height) s.y = 0;
+    });
+
+    if (gameRunning) {
+        bullets.forEach(b => b.draw());
+        aliens.forEach(a => a.draw());
+        player.draw();
+        particles.forEach(p => p.draw());
+    }
+
+    ctx.restore();
+}
+
+function gameLoop() {
+    update();
+    render();
+    requestAnimationFrame(gameLoop);
+}
+
+// Key Listeners
+window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if (e.code === 'Space' && gameRunning && !gamePaused) {
+        e.preventDefault();
+    }
+});
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+// Touch listeners
+window.addEventListener('touchstart', e => {
+    soundEngine.init();
+    if (e.touches.length > 0) {
+        touchX = e.touches[0].clientX;
+        isTouching = true;
+    }
+});
+window.addEventListener('touchmove', e => {
+    if (e.touches.length > 0) touchX = e.touches[0].clientX;
+});
+window.addEventListener('touchend', () => {
+    touchX = null;
+    isTouching = false;
+});
+
+// Mobile Controls
+document.getElementById('btnLeft').addEventListener('touchstart', (e) => { e.preventDefault(); keys['ArrowLeft'] = true; });
+document.getElementById('btnLeft').addEventListener('touchend', (e) => { e.preventDefault(); keys['ArrowLeft'] = false; });
+document.getElementById('btnRight').addEventListener('touchstart', (e) => { e.preventDefault(); keys['ArrowRight'] = true; });
+document.getElementById('btnRight').addEventListener('touchend', (e) => { e.preventDefault(); keys['ArrowRight'] = false; });
+document.getElementById('btnFire').addEventListener('touchstart', (e) => { e.preventDefault(); isTouching = true; });
+document.getElementById('btnFire').addEventListener('touchend', (e) => { e.preventDefault(); isTouching = false; });
+
+// Start & Restart Handlers
+document.getElementById('startBtn').addEventListener('click', () => {
+    soundEngine.init();
+    document.getElementById('startOverlay').classList.add('hidden');
+    resetAndStartGame();
+});
+
+document.getElementById('restartBtn').addEventListener('click', () => {
+    document.getElementById('gameOverOverlay').classList.add('hidden');
+    resetAndStartGame();
+});
+
+// Audio Mute Toggle
+document.getElementById('audioToggle').addEventListener('click', () => {
+    soundEngine.muted = !soundEngine.muted;
+    document.getElementById('audioIconOn').classList.toggle('hidden', soundEngine.muted);
+    document.getElementById('audioIconOff').classList.toggle('hidden', !soundEngine.muted);
+});
+
+function resetAndStartGame() {
+    score = 0;
+    currentScoreTarget = 1000;
+    previousScoreTarget = 0;
+    skillGrantedCount = 0;
+    combo = 1;
+    aliens.length = 0;
+    bullets.length = 0;
+    particles.length = 0;
+    equippedSkills = [];
+    bossSpawnScoreThreshold = 1000;
+    updateActiveSkillsUI();
+    player.reset();
+    gameRunning = true;
+    gamePaused = false;
+}
+
+function endGame() {
+    gameRunning = false;
+    document.getElementById('finalScore').innerText = score;
+    document.getElementById('finalCombo').innerText = `x${combo}`;
+    document.getElementById('gameOverOverlay').classList.remove('hidden');
+}
+
+// Launch Loop
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>

@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-select=none">
+  <title>Space Defense Game</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #060814;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    #gameContainer {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: radial-gradient(circle at center, #0d122b 0%, #04050a 100%);
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .hud-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 20px 25px;
+      pointer-events: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
+
+    .hud-badge {
+      font-size: 20px;
+      font-weight: 800;
+      color: #00ffcc;
+      text-shadow: 0 0 10px rgba(0, 255, 204, 0.6);
+      font-family: monospace;
+      background: rgba(12, 20, 38, 0.65);
+      padding: 8px 18px;
+      border-radius: 10px;
+      border: 1px solid rgba(0, 255, 204, 0.3);
+      backdrop-filter: blur(6px);
+    }
+
+    .level-badge {
+      color: #ff9f43;
+      text-shadow: 0 0 10px rgba(255, 159, 67, 0.6);
+      border-color: rgba(255, 159, 67, 0.3);
+    }
+
+    .controls-hint {
+      color: rgba(255, 255, 255, 0.7);
+      font-size: 13px;
+      background: rgba(12, 20, 38, 0.65);
+      padding: 8px 16px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(6px);
+    }
+
+    .overlay {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.82);
+      backdrop-filter: blur(8px);
+      z-index: 100;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: #ffffff;
+      text-align: center;
+    }
+
+    .game-over-title {
+      font-size: 52px;
+      font-weight: 900;
+      color: #ff3366;
+      text-shadow: 0 0 20px rgba(255, 51, 102, 0.8);
+      letter-spacing: 2px;
+      margin-bottom: 12px;
+    }
+
+    .stage-clear-title {
+      font-size: 56px;
+      font-weight: 900;
+      color: #00ffcc;
+      text-shadow: 0 0 25px rgba(0, 255, 204, 0.9);
+      letter-spacing: 3px;
+      margin-bottom: 15px;
+      animation: pulse 1s infinite alternate;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.96); opacity: 0.85; }
+      100% { transform: scale(1.04); opacity: 1; }
+    }
+
+    .overlay-subtitle {
+      font-size: 24px;
+      color: #ff9f43;
+      font-family: monospace;
+      margin-bottom: 20px;
+      text-shadow: 0 0 10px rgba(255, 159, 67, 0.6);
+    }
+
+    .btn-restart {
+      padding: 14px 36px;
+      font-size: 20px;
+      font-weight: 800;
+      color: #060814;
+      background: #00ffcc;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      box-shadow: 0 0 20px rgba(0, 255, 204, 0.6);
+      transition: all 0.2s ease;
+      letter-spacing: 1px;
+    }
+
+    .btn-restart:hover {
+      transform: scale(1.08);
+      box-shadow: 0 0 30px rgba(0, 255, 204, 0.9);
+      background: #ffffff;
+    }
+
+    .mobile-controls {
+      display: none;
+      position: absolute;
+      bottom: 25px;
+      left: 0;
+      width: 100%;
+      padding: 0 25px;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 20;
+    }
+
+    @media (max-width: 768px) {
+      .mobile-controls { display: flex; }
+      .controls-hint { display: none; }
+      .game-over-title { font-size: 40px; }
+      .stage-clear-title { font-size: 42px; }
+      .hud-badge { font-size: 16px; padding: 6px 12px; }
+    }
+
+    .d-pad { display: flex; gap: 15px; }
+
+    .btn {
+      width: 65px;
+      height: 65px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      color: #ffffff;
+      font-size: 24px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      touch-action: manipulation;
+    }
+
+    .btn-fire {
+      width: 75px;
+      height: 75px;
+      background: rgba(255, 60, 100, 0.25);
+      border-color: rgba(255, 60, 100, 0.6);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="gameContainer">
+    <div class="hud-layer">
+      <div class="hud-badge" id="scoreBoard">Score: 0 / 2000</div>
+      <div class="controls-hint">← A / D → 位移 | 長按 Space 連發射擊</div>
+      <div class="hud-badge level-badge" id="levelBoard">LEVEL: 1</div>
+    </div>
+
+    <div class="overlay" id="gameOverOverlay">
+      <div class="game-over-title" id="gameOverTitle">Game Over!</div>
+      <div class="overlay-subtitle" id="finalScore">FINAL SCORE: 0</div>
+      <button class="btn-restart" id="btnRestart">Defend Again</button>
+    </div>
+
+    <div class="overlay" id="levelTransitionOverlay">
+      <div class="stage-clear-title">STAGE CLEAR!</div>
+      <div class="overlay-subtitle" id="nextLevelText">Entering LEVEL 2...</div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div class="mobile-controls">
+      <div class="d-pad">
+        <div class="btn" id="btnLeft">◀</div>
+        <div class="btn" id="btnRight">▶</div>
+      </div>
+      <div class="btn btn-fire" id="btnFire">⚡</div>
+    </div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreBoard = document.getElementById('scoreBoard');
+    const levelBoard = document.getElementById('levelBoard');
+    
+    const gameOverOverlay = document.getElementById('gameOverOverlay');
+    const gameOverTitle = document.getElementById('gameOverTitle');
+    const finalScore = document.getElementById('finalScore');
+    const btnRestart = document.getElementById('btnRestart');
+
+    const levelTransitionOverlay = document.getElementById('levelTransitionOverlay');
+    const nextLevelText = document.getElementById('nextLevelText');
+
+    let width = canvas.width = window.innerWidth;
+    let height = canvas.height = window.innerHeight;
+
+    let score = 0;
+    let level = 1;
+    const SCORE_PER_KILL = 10;
+    const SCORE_ELITE_KILL = 50;
+    const WIN_SCORE = 2000;
+    let isGameOver = false;
+    let isTransitioning = false;
+
+    window.addEventListener('resize', () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+      player.y = height - 70;
+      initStars();
+      createAlienFleet();
+    });
+
+    function drawSVGPath(ctx, pathStr, x, y, scale, color) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(scale, scale);
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 10;
+      const p = new Path2D(pathStr);
+      ctx.fill(p);
+      ctx.restore();
+    }
+
+    const ALIEN_SHAPES = [
+      "M-12,-12 H-8 V-8 H-4 V-4 H4 V-8 H8 V-12 H12 V-4 H8 V0 H12 V8 H8 V12 H4 V8 H-4 V12 H-8 V8 H-12 V0 H-8 V-4 H-12 Z",
+      "M-6,-12 H6 V-8 H10 V-4 H14 V0 H-14 V-4 H-10 V-8 H-6 Z M-12,2 H12 V6 H-12 Z",
+      "M-8,-12 H8 V-8 H12 V4 H8 V8 H4 V12 H-4 V8 H-8 V4 H-12 V-8 H-8 Z M-6,-4 H-2 V2 H-6 Z M2,-4 H6 V2 H2 Z"
+    ];
+
+    let stars = [];
+    function initStars() {
+      stars = [];
+      for (let i = 0; i < 120; i++) {
+        stars.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          size: Math.random() * 2 + 0.5,
+          alpha: Math.random() * 0.8 + 0.2,
+          speed: Math.random() * 0.5 + 0.2
+        });
+      }
+    }
+    initStars();
+
+    const player = { x: width / 2, y: height - 70, speed: 8 };
+    let rescuedHelpers = 0;
+    let rescuesOnField = [];
+
+    const keys = { left: false, right: false, spacePressed: false };
+    let playerBullets = [];
+    let alienBullets = [];
+    let explosions = [];
+
+    let lastPlayerShootTime = 0;
+    const FIRE_INTERVAL = 150; 
+
+    const alienRows = 4;
+    const alienCols = 8;
+    const alienColors = ['#e056fd', '#00d2d3', '#78e08f', '#ff9f43'];
+    let aliens = [];
+    let eliteAliens = []; // 獨立自由行動的精英怪陣列
+    let fleetDirection = 1;
+    let fleetSpeed = 0.4;
+    let lastAlienShootTime = Date.now();
+
+    function createAlienFleet() {
+      aliens = [];
+      eliteAliens = [];
+      fleetDirection = 1;
+      fleetSpeed = 0.4 + (level - 1) * 0.15;
+
+      const startY = 80;
+      const rowSpacing = 48;
+      const sideMargin = Math.max(40, width * 0.12);
+      const usableWidth = width - sideMargin * 2;
+      const colSpacing = usableWidth / (alienCols - 1);
+
+      // 生成普通小怪陣列
+      for (let r = 0; r < alienRows; r++) {
+        const color = alienColors[r % alienColors.length];
+        const shape = ALIEN_SHAPES[r % ALIEN_SHAPES.length];
+        for (let c = 0; c < alienCols; c++) {
+          aliens.push({
+            x: sideMargin + c * colSpacing,
+            y: startY + r * rowSpacing,
+            color: color,
+            shape: shape,
+            alive: true,
+            hp: 1,
+            maxHp: 1
+          });
+        }
+      }
+
+      // 第二關開始，生成自由巡航的精英怪
+      if (level >= 2) {
+        const eliteCount = Math.min(3, Math.floor(level / 2) + 1);
+        for (let i = 0; i < eliteCount; i++) {
+          eliteAliens.push({
+            x: Math.random() * (width - 160) + 80,
+            y: Math.random() * 100 + 60,
+            vx: (Math.random() - 0.5) * 3.5,
+            vy: (Math.random() - 0.5) * 2,
+            color: '#ff0055',
+            shape: ALIEN_SHAPES[i % ALIEN_SHAPES.length],
+            alive: true,
+            hp: 5,
+            maxHp: 5,
+            changeDirTime: Date.now() + Math.random() * 2000
+          });
+        }
+      }
+    }
+    createAlienFleet();
+
+    function spawnRescueItem() {
+      rescuesOnField.push({
+        x: Math.random() * (width - 100) + 50,
+        y: -30,
+        speed: 1.8
+      });
+    }
+
+    function initGame() {
+      score = 0;
+      level = 1;
+      rescuedHelpers = 0;
+      rescuesOnField = [];
+      isGameOver = false;
+      isTransitioning = false;
+      playerBullets = [];
+      alienBullets = [];
+      explosions = [];
+      player.x = width / 2;
+      scoreBoard.textContent = `Score: 0 / ${WIN_SCORE}`;
+      levelBoard.textContent = `LEVEL: ${level}`;
+      gameOverOverlay.style.display = 'none';
+      levelTransitionOverlay.style.display = 'none';
+      createAlienFleet();
+    }
+
+    function triggerGameOver(isWin) {
+      isGameOver = true;
+      if (isWin) {
+        gameOverTitle.textContent = "VICTORY!";
+        gameOverTitle.style.color = "#00ffcc";
+        gameOverTitle.style.textShadow = "0 0 20px rgba(0, 255, 204, 0.8)";
+      } else {
+        gameOverTitle.textContent = "Game Over!";
+        gameOverTitle.style.color = "#ff3366";
+        gameOverTitle.style.textShadow = "0 0 20px rgba(255, 51, 102, 0.8)";
+      }
+      finalScore.textContent = `FINAL SCORE: ${score} (LEVEL ${level})`;
+      gameOverOverlay.style.display = 'flex';
+    }
+
+    function triggerNextLevel() {
+      isTransitioning = true;
+      level++;
+      playerBullets = [];
+      alienBullets = [];
+      nextLevelText.textContent = `Entering LEVEL ${level}...`;
+      levelTransitionOverlay.style.display = 'flex';
+
+      setTimeout(() => {
+        levelBoard.textContent = `LEVEL: ${level}`;
+        createAlienFleet();
+        levelTransitionOverlay.style.display = 'none';
+        isTransitioning = false;
+      }, 2000);
+    }
+
+    btnRestart.addEventListener('click', () => { initGame(); });
+
+    window.addEventListener('keydown', (e) => {
+      if (isGameOver && (e.key === ' ' || e.code === 'Space' || e.key === 'r' || e.key === 'R')) {
+        initGame();
+        return;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = true;
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = true;
+      if (e.code === 'Space' || e.key === ' ') {
+        e.preventDefault();
+        keys.spacePressed = true;
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.left = false;
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.right = false;
+      if (e.code === 'Space' || e.key === ' ') keys.spacePressed = false;
+    });
+
+    const btnLeft = document.getElementById('btnLeft');
+    const btnRight = document.getElementById('btnRight');
+    const btnFire = document.getElementById('btnFire');
+
+    const bindTouch = (elem, onPress, onRelease) => {
+      elem.addEventListener('touchstart', (e) => { e.preventDefault(); onPress(); });
+      elem.addEventListener('touchend', (e) => { e.preventDefault(); onRelease(); });
+      elem.addEventListener('mousedown', onPress);
+      elem.addEventListener('mouseup', onRelease);
+    };
+
+    bindTouch(btnLeft, () => keys.left = true, () => keys.left = false);
+    bindTouch(btnRight, () => keys.right = true, () => keys.right = false);
+    bindTouch(btnFire, () => keys.spacePressed = true, () => keys.spacePressed = false);
+
+    function getHelperPositions() {
+      const offsets = [];
+      for (let i = 1; i <= rescuedHelpers; i++) {
+        const dist = Math.ceil(i / 2) * 35;
+        const sign = i % 2 === 1 ? -1 : 1;
+        offsets.push(sign * dist);
+      }
+      return offsets;
+    }
+
+    function fireBullet() {
+      playerBullets.push({ x: player.x, y: player.y - 25, vx: 0, vy: -11 });
+      const helperOffsets = getHelperPositions();
+      helperOffsets.forEach(offset => {
+        const helperX = player.x + offset;
+        const helperY = player.y;
+        const angles = [-0.2, 0, 0.2];
+        angles.forEach(angle => {
+          playerBullets.push({
+            x: helperX,
+            y: helperY - 15,
+            vx: Math.sin(angle) * 11,
+            vy: -Math.cos(angle) * 11
+          });
+        });
+      });
+    }
+
+    function alienShoot() {
+      const activeNormal = aliens.filter(a => a.alive);
+      const activeElite = eliteAliens.filter(e => e.alive);
+      const allActive = [...activeNormal, ...activeElite];
+      if (allActive.length === 0) return;
+
+      const shooter = allActive[Math.floor(Math.random() * allActive.length)];
+      alienBullets.push({ x: shooter.x, y: shooter.y + 15, speed: 4.5 + Math.min(level * 0.3, 3) });
+    }
+
+    function update() {
+      if (isGameOver || isTransitioning) return;
+
+      const now = Date.now();
+
+      if (keys.spacePressed && now - lastPlayerShootTime >= FIRE_INTERVAL) {
+        fireBullet();
+        lastPlayerShootTime = now;
+      }
+
+      const shootInterval = Math.max(800, 1800 - (level - 1) * 200);
+      if (now - lastAlienShootTime >= shootInterval) { alienShoot(); lastAlienShootTime = now; }
+
+      if (keys.left) player.x -= player.speed;
+      if (keys.right) player.x += player.speed;
+      player.x = Math.max(40, Math.min(width - 40, player.x));
+
+      if (Math.random() < 0.003 && rescuesOnField.length < 1 && rescuedHelpers < 6) {
+        spawnRescueItem();
+      }
+
+      for (let i = rescuesOnField.length - 1; i >= 0; i--) {
+        const r = rescuesOnField[i];
+        r.y += r.speed;
+        if (Math.hypot(player.x - r.x, player.y - r.y) < 35) {
+          rescuedHelpers++;
+          rescuesOnField.splice(i, 1);
+          continue;
+        }
+        if (r.y > height + 30) rescuesOnField.splice(i, 1);
+      }
+
+      for (let i = playerBullets.length - 1; i >= 0; i--) {
+        const b = playerBullets[i];
+        b.x += b.vx;
+        b.y += b.vy;
+        if (b.y < -10 || b.x < -10 || b.x > width + 10) playerBullets.splice(i, 1);
+      }
+
+      for (let i = alienBullets.length - 1; i >= 0; i--) {
+        alienBullets[i].y += alienBullets[i].speed;
+        if (alienBullets[i].y > height + 10) alienBullets.splice(i, 1);
+      }
+
+      // 1. 普通敵機陣列移動
+      let hitEdge = false;
+      const activeAliens = aliens.filter(a => a.alive);
+      activeAliens.forEach(a => {
+        const nextX = a.x + fleetSpeed * fleetDirection;
+        if ((fleetDirection === 1 && nextX >= width - 30) || (fleetDirection === -1 && nextX <= 30)) hitEdge = true;
+        if (a.y + 20 >= player.y - 15) triggerGameOver(false);
+      });
+
+      if (hitEdge) {
+        fleetDirection *= -1;
+        fleetSpeed += 0.08;
+        activeAliens.forEach(a => a.y += 18);
+      } else {
+        activeAliens.forEach(a => a.x += fleetSpeed * fleetDirection);
+      }
+
+      // 2. 精英怪自由巡航 AI 更新
+      eliteAliens.forEach(e => {
+        if (!e.alive) return;
+
+        // 隨機變向
+        if (now > e.changeDirTime) {
+          e.vx = (Math.random() - 0.5) * 4;
+          e.vy = (Math.random() - 0.5) * 2.5;
+          e.changeDirTime = now + 1500 + Math.random() * 2000;
+        }
+
+        e.x += e.vx;
+        e.y += e.vy;
+
+        // 邊界反彈 (控制在上半區域巡航)
+        if (e.x < 40 || e.x > width - 40) e.vx *= -1;
+        if (e.y < 50 || e.y > height * 0.55) e.vy *= -1;
+
+        // 精英怪觸碰玩家直接 Game Over
+        if (Math.hypot(player.x - e.x, player.y - e.y) < 35) {
+          triggerGameOver(false);
+        }
+      });
+
+      // 3. 玩家子彈與普通怪/精英怪碰撞判定
+      for (let i = playerBullets.length - 1; i >= 0; i--) {
+        const b = playerBullets[i];
+        let bulletDestroyed = false;
+
+        // 先判定精英怪
+        for (let e of eliteAliens) {
+          if (e.alive && Math.hypot(b.x - e.x, b.y - e.y) < 28) {
+            bulletDestroyed = true;
+            e.hp--;
+
+            for (let k = 0; k < 5; k++) {
+              explosions.push({
+                x: b.x, y: b.y,
+                vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5,
+                color: '#ff9f43', life: 10
+              });
+            }
+
+            if (e.hp <= 0) {
+              e.alive = false;
+              score += SCORE_ELITE_KILL;
+              scoreBoard.textContent = `Score: ${score} / ${WIN_SCORE}`;
+
+              for (let k = 0; k < 30; k++) {
+                explosions.push({
+                  x: e.x, y: e.y,
+                  vx: (Math.random() - 0.5) * 9, vy: (Math.random() - 0.5) * 9,
+                  color: e.color, life: 20
+                });
+              }
+            }
+            break;
+          }
+        }
+
+        if (bulletDestroyed) {
+          playerBullets.splice(i, 1);
+          continue;
+        }
+
+        // 再判定普通小怪
+        for (let j = 0; j < aliens.length; j++) {
+          const a = aliens[j];
+          if (a.alive && Math.hypot(b.x - a.x, b.y - a.y) < 18) {
+            a.alive = false;
+            playerBullets.splice(i, 1);
+            score += SCORE_PER_KILL;
+            scoreBoard.textContent = `Score: ${score} / ${WIN_SCORE}`;
+            for (let k = 0; k < 10; k++) {
+              explosions.push({
+                x: a.x, y: a.y,
+                vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6,
+                color: a.color, life: 15
+              });
+            }
+            break;
+          }
+        }
+      }
+
+      // 4. 敵機子彈碰撞玩家
+      const helperOffsets = getHelperPositions();
+      const allPlayerPoints = [0, ...helperOffsets];
+      for (let i = alienBullets.length - 1; i >= 0; i--) {
+        const b = alienBullets[i];
+        let hitPlayer = false;
+        for (let offset of allPlayerPoints) {
+          if (Math.hypot(b.x - (player.x + offset), b.y - player.y) < 22) {
+            hitPlayer = true;
+            break;
+          }
+        }
+        if (hitPlayer) {
+          triggerGameOver(false);
+          break;
+        }
+      }
+
+      // 檢查通關
+      const allAliensDead = aliens.every(a => !a.alive) && eliteAliens.every(e => !e.alive);
+      if (score >= WIN_SCORE) { 
+        triggerGameOver(true); 
+      } else if ((aliens.length > 0 || eliteAliens.length > 0) && allAliensDead) {
+        triggerNextLevel();
+      }
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, width, height);
+
+      ctx.fillStyle = '#ffffff';
+      stars.forEach(s => {
+        s.y += s.speed;
+        if (s.y > height) s.y = 0;
+        ctx.globalAlpha = s.alpha;
+        ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2); ctx.fill();
+      });
+      ctx.globalAlpha = 1.0;
+
+      // 繪製普通小怪
+      aliens.forEach(a => {
+        if (a.alive) drawSVGPath(ctx, a.shape, a.x, a.y, 1.1, a.color);
+      });
+
+      // 繪製自由巡航精英怪
+      eliteAliens.forEach(e => {
+        if (e.alive) {
+          drawSVGPath(ctx, e.shape, e.x, e.y, 1.7, e.color);
+
+          ctx.save();
+          ctx.strokeStyle = '#ff3366';
+          ctx.lineWidth = 2.5;
+          ctx.beginPath();
+          ctx.arc(e.x, e.y, 25, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // 精英怪 HP 血條
+          const barW = 34;
+          const barH = 5;
+          const hpRatio = e.hp / e.maxHp;
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+          ctx.fillRect(e.x - barW / 2, e.y - 32, barW, barH);
+          ctx.fillStyle = '#00ffcc';
+          ctx.fillRect(e.x - barW / 2, e.y - 32, barW * hpRatio, barH);
+          ctx.restore();
+        }
+      });
+
+      const ROCKET_SHAPE = "M0,-20 L12,12 L5,10 L0,15 L-5,10 L-12,12 Z";
+      rescuesOnField.forEach(r => {
+        ctx.save();
+        ctx.strokeStyle = '#00ffcc';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, 22, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.fillStyle = '#00ffcc';
+        ctx.font = '10px monospace';
+        ctx.fillText('RESCUE', r.x - 20, r.y - 28);
+        ctx.restore();
+
+        drawSVGPath(ctx, ROCKET_SHAPE, r.x, r.y, 0.9, '#fffa65');
+      });
+
+      ctx.fillStyle = '#fffa65';
+      ctx.shadowColor = '#fff200'; ctx.shadowBlur = 8;
+      playerBullets.forEach(b => {
+        ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI * 2); ctx.fill();
+      });
+
+      ctx.fillStyle = '#ff4d4d';
+      ctx.shadowColor = '#ff3333'; ctx.shadowBlur = 8;
+      alienBullets.forEach(b => {
+        ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI * 2); ctx.fill();
+      });
+
+      explosions.forEach((p, idx) => {
+        ctx.fillStyle = p.color;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+        p.x += p.vx; p.y += p.vy; p.life--;
+        if (p.life <= 0) explosions.splice(idx, 1);
+      });
+
+      if (!isGameOver) {
+        drawSVGPath(ctx, ROCKET_SHAPE, player.x, player.y, 1.2, '#00ffcc');
+        const helperOffsets = getHelperPositions();
+        helperOffsets.forEach(offset => {
+          drawSVGPath(ctx, ROCKET_SHAPE, player.x + offset, player.y, 0.9, '#70a1ff');
+        });
+      }
+    }
+
+    function gameLoop() { update(); render(); requestAnimationFrame(gameLoop); }
+    gameLoop();
+  </script>
+</body>
+</html>
