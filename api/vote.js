@@ -1,4 +1,10 @@
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
+
+// 同時支援 Upstash marketplace（UPSTASH_REDIS_*）與 Vercel 原生 KV（KV_*）的環境變數
+const kv = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN,
+});
 
 // POST /api/vote  { id: "遊戲ID" }  →  { id, votes }
 // 同一 IP 每 60 秒最多投 10 票（學校 WiFi 共用 IP，過嚴會擋住正常投票）
