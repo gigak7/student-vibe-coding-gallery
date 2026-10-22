@@ -3,6 +3,7 @@ import { Redis } from '@upstash/redis';
 // 建立 Redis 連線：自動尋找 Upstash / Vercel KV 的環境變數，
 // 支援標準命名（UPSTASH_REDIS_* / KV_*）以及 Vercel 連接時自訂的任何前綴
 //（自訂前綴時用「值」來辨認：upstash 的 REST URL 形如 https://xxx.upstash.io）
+//（2026-10-22 Upstash 已連接，觸發含新環境變數的重新部署）
 function connectRedis() {
   const env = process.env;
   let url = env.UPSTASH_REDIS_REST_URL || env.KV_REST_API_URL;
