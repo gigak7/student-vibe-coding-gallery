@@ -1,10 +1,4 @@
-import { Redis } from '@upstash/redis';
-
-// 同時支援 Upstash marketplace（UPSTASH_REDIS_*）與 Vercel 原生 KV（KV_*）的環境變數
-const kv = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN,
-});
+import { kv } from './_redis.js';
 
 // GET /api/votes  →  { "<遊戲ID>": 票數, ... }
 export default async function handler(req, res) {
